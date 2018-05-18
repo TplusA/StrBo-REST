@@ -57,9 +57,9 @@ def try_unmount_partition(mountpoint):
     return UnmountResult.FAILED
 
 
-def request_wants_json(request):
-    best = request.accept_mimetypes.best_match(['application/json', 'text/html'])
-    return best == 'application/json' and request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+def request_wants_haljson(request):
+    best = request.accept_mimetypes.best_match(['application/hal+json', 'text/html'])
+    return best == 'application/hal+json' and request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
 
 def request_accepts_utf8(request):
     return request.accept_charsets.find('utf-8') >= 0

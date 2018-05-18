@@ -5,8 +5,6 @@ import re
 from pathlib import Path, PurePath
 from hashlib import sha256
 
-from .urlmap import url_for
-from .utils import jsonify
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 
@@ -90,12 +88,10 @@ def get_info_or_verify(request, mountpoint, with_verify, **values):
     if not version_info:
         version_info = { 'is_valid': 'false' }
 
-    return jsonify(request,
-                   version_info = version_info,
-                   recovery_system_state = {
-                       'recovery_files': fileset,
-                       'state': overall_valid_state
-                   })
+    return version_info, {
+               'recovery_files': fileset,
+               'state': overall_valid_state
+           }
 
 def get_info_or_verify_wrapper(request, with_verify, **values):
     mountpoint = Path('/mnt')
@@ -110,13 +106,43 @@ def get_info_or_verify_wrapper(request, with_verify, **values):
 
     return result
 
-def on_recovery_system_info(request, **values):
-    return get_info_or_verify_wrapper(request, False, **values)
 
-def on_recovery_system_verify(request, **values):
-    return get_info_or_verify_wrapper(request, True, **values)
+import halogen
 
-def on_recovery_system(request, **values):
-    return jsonify(request,
-                   info = url_for(request, 'recovery_system_info'),
-                   verify = url_for(request, 'recovery_system_verify'))
+from .endpoint import Endpoint
+from .utils import jsonify
+
+class InfoSchema(halogen.Schema):
+    self = halogen.Link(attr = 'href')
+    version_info = halogen.Attr()
+    recovery_system_state = halogen.Attr()
+
+class Info(Endpoint):
+    version_info = None
+    recovery_system_state = None
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_info', '/recovery/info',
+                          'Information about recovery system data')
+
+    def __call__(self, request, **values):
+        self.version_info, self.recovery_system_state = get_info_or_verify_wrapper(request, False, **values)
+        return jsonify(request, InfoSchema.serialize(self))
+
+class Verify(Endpoint):
+    version_info = None
+    recovery_system_state = None
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_verify', '/recovery/verify',
+                          'Verification of recovery system data')
+
+    def __call__(self, request, **values):
+        self.version_info, self.recovery_system_state = get_info_or_verify_wrapper(request, True, **values)
+        return jsonify(request, InfoSchema.serialize(self))
+
+all_endpoints = [Info(), Verify()]
+
+def add_endpoints():
+    from .endpoint import register_endpoints
+    register_endpoints(all_endpoints)
