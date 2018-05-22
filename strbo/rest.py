@@ -9,13 +9,17 @@ from .endpoint import Endpoint, dispatch
 from .utils import jsonify
 
 class EntryPoint(Endpoint):
+    """API Endpoint: Entry point to API."""
     class Schema(halogen.Schema):
         self = halogen.Link(attr = 'href')
         recovery = halogen.Link(halogen.types.List(Endpoint.Schema))
         api_version = halogen.Attr({'major': 1, 'minor': 0})
 
+    href = '/'
+    methods = ('GET',)
+
     def __init__(self):
-        Endpoint.__init__(self, 'entry_point', '/')
+        Endpoint.__init__(self, 'entry_point')
 
         from .recovery import all_endpoints as all_recovery_endpoints
         self.recovery = all_recovery_endpoints
@@ -34,6 +38,7 @@ def error_response_from_exception(request, e, kind, code):
                    })
 
 class StrBo:
+    """Our WSGI application."""
     def wsgi_app(self, environ, start_response):
         try:
             request = Request(environ)
