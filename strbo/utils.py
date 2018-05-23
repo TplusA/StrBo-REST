@@ -3,7 +3,6 @@
 
 from enum import Enum
 from werkzeug.wrappers import Request, Response
-import subprocess
 import json
 
 class MountResult(Enum):
@@ -20,6 +19,8 @@ class UnmountResult(Enum):
 
 def try_mount_partition(mountpoint, writable = False):
     try:
+        import subprocess
+
         cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
         if cmd.wait(2) == 0:
             return MountResult.ALREADY_MOUNTED
@@ -39,6 +40,8 @@ def try_mount_partition(mountpoint, writable = False):
 
 def try_unmount_partition(mountpoint):
     try:
+        import subprocess
+
         cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
         if cmd.wait(2) != 0:
             return UnmountResult.NOT_MOUNTED

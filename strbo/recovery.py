@@ -1,7 +1,6 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import re
 from pathlib import Path, PurePath
 from hashlib import sha256
 from time import time
@@ -56,6 +55,7 @@ def get_info_and_verify(request, mountpoint, **values):
             with temp.open() as f:
                 checksums = {}
                 for l in f:
+                    import re
                     checksum, filename = re.split(r' +', l.strip())
                     checksums[filename] = checksum
 
