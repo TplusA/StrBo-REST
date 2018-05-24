@@ -40,7 +40,7 @@ def generate_file_info(file, checksums):
 
     return fi
 
-def get_info_and_verify(request, mountpoint, **values):
+def get_info_and_verify(mountpoint, **values):
     p = mountpoint / 'images'
     mount_result = try_mount_partition(mountpoint)
     version_info = None
@@ -87,11 +87,11 @@ def get_info_and_verify(request, mountpoint, **values):
                'state': overall_valid_state
            }
 
-def verify_wrapper(request, **values):
+def verify_wrapper(**values):
     mountpoint = Path('/mnt')
 
     try:
-        version_info, status = get_info_and_verify(request, mountpoint, **values)
+        version_info, status = get_info_and_verify(mountpoint, **values)
     except:
         try_unmount_partition(mountpoint)
         raise
@@ -173,7 +173,7 @@ class Verify(Endpoint):
         # this section is protected by self.processing
         try:
             failed = False
-            inf, st = verify_wrapper(request, **values)
+            inf, st = verify_wrapper(**values)
         except Exception as e:
             failed = True
             inf = None
