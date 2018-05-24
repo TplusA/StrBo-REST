@@ -8,6 +8,7 @@ from threading import RLock
 
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
+from .utils import remove_directory
 
 def generate_file_info(file, checksums):
     expected = 'unavailable' if not checksums or file.name not in checksums else checksums[file.name]
@@ -202,8 +203,176 @@ class Verify(Endpoint):
         else:
             return 'idle'
 
+def get_data_file_from_form(request):
+    f = request.files.get('datafile', None)
+
+    if f and f.content_type != 'application/octet-stream':
+        raise Exception('Unexpected content type')
+
+    return f
+
+def create_workdir():
+    workdir = Path('/var/local/data/recovery_data_update')
+
+    try:
+        remove_directory(workdir, False)
+    except:
+        pass
+
+    try:
+        workdir.mkdir()
+    except FileExistsError:
+        pass
+
+    return workdir
+
+def replace_recovery_system_data(request, status):
+    url_from_form = request.values.get('dataurl', None)
+
+    if url_from_form:
+        status.set_retrieving(url_from_form)
+        file_from_form = None
+    else:
+        status.set_retrieving()
+        file_from_form = get_data_file_from_form(request)
+
+    workdir = create_workdir()
+    gpgfile = workdir / 'recoverydata.gpg'
+    payload = workdir / 'recoverydata'
+    is_mounted = False
+
+    try:
+        if url_from_form:
+            from urllib.request import urlopen
+            from werkzeug.datastructures import FileStorage
+            url = urlopen(url_from_form)
+            f = FileStorage(url, gpgfile.name)
+            f.save(str(gpgfile))
+        elif file_from_form:
+            file_from_form.save(str(gpgfile))
+        else:
+            raise Exception('No data file specified')
+
+        status.set_step_name('verifying signature')
+        import subprocess
+
+        cmd = subprocess.Popen(['gpg',
+                                '--homedir', str(gpgfile.parent),
+                                '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
+                                str(gpgfile)],
+                                cwd = str(gpgfile.parent))
+        if cmd.wait(600) != 0:
+            return jsonify(request, result = 'error', reason = 'invalid signature')
+
+        status.set_step_name('verifying archive')
+        cmd = subprocess.Popen(['tar', 'tf', str(payload)])
+        if cmd.wait(150) != 0:
+            return jsonify(request, result = 'error', reason = 'broken archive')
+
+        status.set_step_name('extracting')
+        mountpoint = Path('/mnt')
+        mount_result = try_mount_partition(mountpoint, True)
+
+        if mount_result is MountResult.MOUNTED:
+            is_mounted = True
+
+            imgdir = mountpoint / 'images'
+            remove_directory(imgdir, False)
+
+            cmd = subprocess.Popen(['tar', 'xf', str(payload)], cwd = str(imgdir))
+            if cmd.wait(300) != 0:
+                result = jsonify(request, result = 'error', reason = 'write error')
+            else:
+                result = jsonify(request, result = 'success', reason = 'super hero')
+        elif mount_result is MountResult.ALREADY_MOUNTED:
+            result = jsonify(request, result = 'error', reason = 'locked')
+        elif mount_result is MountResult.FAILED:
+            result = jsonify(request, result = 'error', reason = 'inaccessible')
+        elif mount_result is MountResult.TIMEOUT:
+            result = jsonify(request, result = 'error', reason = 'mount timeout')
+        else:
+            result = jsonify(request, result = 'error', reason = 'unknown')
+
+        status.set_step_name('finalizing')
+        try_unmount_partition(mountpoint)
+        is_mounted = False
+
+        remove_directory(workdir)
+
+        return result
+    except:
+        if is_mounted:
+            try_unmount_partition(mountpoint)
+
+        remove_directory(workdir)
+
+        raise
+
+class Replace(Endpoint):
+    """API Endpoint: Replace the recovery system data.
+
+    Method ``GET``: Read out state of the replacement process.
+
+    Method ``POST``: Start the replacement process. The recovery data archive
+    is passed as form, either as download URL (``dataurl``) or as direct data
+    stream (``datafile``). If both are passed, then ``dataurl`` is preferred
+    and ``datafile`` gets ignored. The result is returned after the replacement
+    has been performed. Simultaneous ``POST`` requests are blocked.
+    """
+    class Schema(halogen.Schema):
+        self = halogen.Link(attr = 'href')
+        state = halogen.Attr(attr = lambda value: value.get_state_string())
+        origin = halogen.Attr(attr = lambda value: value.get_data_origin() if value.processing else value.does_not_exist(), required = False)
+
+    href = '/recovery/replace'
+    methods = ('GET', 'POST')
+    lock = RLock()
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_replace', 'Replace recovery system data')
+        self.reset()
+
+    def __call__(self, request, **values):
+        with self.lock:
+            if request.method == 'GET' or self.processing:
+                return jsonify(request, Replace.Schema.serialize(self))
+
+            self.processing = True
+            self.step = 'receiving request'
+            self.url = '<unknown>'
+
+        # this section is protected by self.processing
+        try:
+            result = replace_recovery_system_data(request, self)
+            self.reset()
+            return result
+        except:
+            self.reset()
+            raise
+
+    def reset(self):
+        with self.lock:
+            self.processing = False
+            self.step = None
+            self.url = None
+
+    def set_retrieving(self, url = None):
+        with self.lock:
+            self.step = 'downloading' if url else 'retrieving'
+            self.url = url if url else '<form data>'
+
+    def set_step_name(self, name):
+        with self.lock:
+            self.step = name
+
+    def get_state_string(self):
+        return self.step if self.processing else 'idle'
+
+    def get_data_origin(self):
+        return self.url if self.processing else None
+
 status_endpoint = Status()
-all_endpoints = [status_endpoint, Verify(status_endpoint)]
+all_endpoints = [status_endpoint, Verify(status_endpoint), Replace()]
 
 def add_endpoints():
     from .endpoint import register_endpoints
