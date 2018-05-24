@@ -59,6 +59,16 @@ def try_unmount_partition(mountpoint):
 
     return UnmountResult.FAILED
 
+def remove_directory(dir, remove_dir = True):
+    for item in dir.iterdir():
+        if item.is_dir():
+            remove_directory(item, True)
+            item.rmdir()
+        else:
+            item.unlink()
+
+    if remove_dir:
+        dir.rmdir()
 
 def request_wants_haljson(request):
     best = request.accept_mimetypes.best_match(['application/hal+json', 'text/html'])
