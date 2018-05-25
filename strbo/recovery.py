@@ -144,7 +144,7 @@ class Status(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            return jsonify(request, Status.Schema.serialize(self))
+            return jsonify(request, __class__.Schema.serialize(self))
 
     def set(self, version_info, status):
         with self.lock:
@@ -182,7 +182,7 @@ class Verify(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET' or self.processing or self.rate_limit():
-                return jsonify(request, Verify.Schema.serialize(self))
+                return jsonify(request, __class__.Schema.serialize(self))
 
             self.processing = True
             self.failed = False
@@ -200,7 +200,7 @@ class Verify(Endpoint):
             self.status.set(inf, st)
             self.processing = False
             self.failed = failed
-            return jsonify(request, Verify.Schema.serialize(self))
+            return jsonify(request, __class__.Schema.serialize(self))
 
     def rate_limit(self):
         if self.status:
@@ -351,7 +351,7 @@ class Replace(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET' or self.processing:
-                return jsonify(request, Replace.Schema.serialize(self))
+                return jsonify(request, __class__.Schema.serialize(self))
 
             self.processing = True
             self.step = 'receiving request'

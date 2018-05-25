@@ -41,7 +41,7 @@ class EntryPoint(Endpoint):
         self.recovery = all_recovery_endpoints
 
     def __call__(self, request, **values):
-        return jsonify(request, EntryPoint.Schema.serialize(self))
+        return jsonify(request, __class__.Schema.serialize(self))
 
 def error_response_from_exception(request, e, kind, code):
     import traceback
