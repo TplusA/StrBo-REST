@@ -110,3 +110,13 @@ def jsonify(is_utf8_ok, *args, **kwargs):
         use_utf8 = is_utf8_ok
 
     return pack_json_into_response(json.dumps(data, skipkeys = True, ensure_ascii = not use_utf8))
+
+def jsonify_simple(*args, **kwargs):
+    if args and kwargs:
+        raise TypeError('jsonify_simple() behavior undefined when passed both args and kwargs')
+    elif len(args) == 1:
+        data = args[0]
+    else:
+        data = args or kwargs
+
+    return json.dumps(data, skipkeys = True, ensure_ascii = False)

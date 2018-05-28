@@ -28,6 +28,7 @@ class EntryPoint(Endpoint):
     """API Endpoint: Entry point to API."""
     class Schema(halogen.Schema):
         self = halogen.Link(attr = 'href')
+        airable = halogen.Link(halogen.types.List(Endpoint.Schema))
         recovery = halogen.Link(halogen.types.List(Endpoint.Schema))
         api_version = halogen.Attr({'major': 1, 'minor': 0})
         monitor_port = halogen.Attr()
@@ -40,6 +41,9 @@ class EntryPoint(Endpoint):
 
         from . import MONITOR_PORT
         self.monitor_port = MONITOR_PORT
+
+        from .airable import all_endpoints as all_airable_endpoints
+        self.airable = all_airable_endpoints
 
         from .recovery import all_endpoints as all_recovery_endpoints
         self.recovery = all_recovery_endpoints

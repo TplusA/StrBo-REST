@@ -19,13 +19,20 @@
 
 from .rest import EntryPoint, StrBo
 from .endpoint import Endpoint, register_endpoint
+from .dbus import Bus
 from .monitor import Monitor
 
 MONITOR_PORT = 8468
 monitor = Monitor()
 monitor.start(MONITOR_PORT)
 
+# create the shared instance
+Bus()
+
 register_endpoint(EntryPoint())
+
+from .airable import add_endpoints as add_airable_endpoints
+add_airable_endpoints()
 
 from .recovery import add_endpoints as add_recovery_endpoints
 add_recovery_endpoints()
