@@ -43,27 +43,11 @@ class EntryPoint(Endpoint):
     def __call__(self, request, **values):
         return jsonify(request, __class__.Schema.serialize(self))
 
-def error_response_from_exception(request, e, kind, code):
-    import traceback
-    return jsonify(request,
-                   error = {
-                       'message': kind + ': ' + str(e),
-                       'code': code,
-                       'trace': traceback.extract_tb(tb = e.__traceback__),
-                       'environment': str(request.environ)
-                   })
-
 class StrBo:
     """Our WSGI application."""
     def wsgi_app(self, environ, start_response):
-        try:
-            request = Request(environ)
-            response = dispatch(request)
-        except HTTPException as e:
-            response = error_response_from_exception(request, e, 'HTTP exception', e.code)
-        except Exception as e:
-            response = error_response_from_exception(request, e, 'Python exception', 500)
-
+        request = Request(environ)
+        response = dispatch(request)
         return response(environ, start_response)
 
     def __call__(self, environ, start_response):
