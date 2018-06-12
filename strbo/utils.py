@@ -94,7 +94,7 @@ def request_accepts_utf8(request):
     return request.accept_charsets.find('utf-8') >= 0
 
 def pack_json_into_response(json):
-    return Response(json, mimetype = 'application/json')
+    return Response(json, mimetype = 'application/hal+json')
 
 def jsonify(is_utf8_ok, *args, **kwargs):
     if args and kwargs:
