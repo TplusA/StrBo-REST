@@ -157,6 +157,53 @@ class Services(Endpoint):
         if send_to_monitor:
             monitor.send(self, service_id = id)
 
+class Auth(Endpoint):
+    """API Endpoint: Authentication with Airable using the appliance key.
+
+    Method ``GET``: Return authentication URL.
+    """
+    href = '/airable/authentication'
+    methods = ('GET',)
+
+    def __init__(self):
+        Endpoint.__init__(self, 'airable_authentication', 'Airable authentication URL')
+
+    def __call__(self, request, **values):
+        try:
+            locale = request.args.get('locale', 'de-DE')
+            iface = strbo.dbus.Interfaces.airable()
+            auth_url = iface.GenerateAuthenticationURL(locale)
+            return jsonify(request, {'url': auth_url, 'locale': locale})
+        except:
+            log.error('Failed generating Airable authentication URL')
+            raise
+
+class Password(Endpoint):
+    """API Endpoint: Generate temporary password for Airable protocol.
+
+    Method ``GET``: Return password based on token and timestamp.
+    """
+    href = '/airable/password'
+    methods = ('GET',)
+
+    def __init__(self):
+        Endpoint.__init__(self, 'airable_password', 'Airable password generator')
+
+    def __call__(self, request, **values):
+        try:
+            token = request.args.get('token', None)
+            timestamp = request.args.get('time', None)
+
+            if token is None or timestamp is None:
+                return jsonify(request, {})
+
+            iface = strbo.dbus.Interfaces.airable()
+            password = iface.GeneratePassword(token, timestamp)
+            return jsonify(request, {'password': password, 'token': token, 'time': timestamp})
+        except:
+            log.error('Failed generating Airable authentication URL')
+            raise
+
 class Info(Endpoint):
     """API Endpoint: Entry point for interfacing with Airable.
 
@@ -210,7 +257,7 @@ class Info(Endpoint):
             raise
 
 info_endpoint = Info()
-all_endpoints = [info_endpoint, info_endpoint.services]
+all_endpoints = [info_endpoint, info_endpoint.services, Auth(), Password()]
 
 def signal__external_service_login_status(service_id, actor_id, log_in, error_code, info):
     login_status = {
