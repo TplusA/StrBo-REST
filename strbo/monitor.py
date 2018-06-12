@@ -18,6 +18,8 @@
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
 from .endpoint import Endpoint
+from .utils import get_logger
+log = get_logger('Monitor')
 
 import threading
 import selectors
@@ -45,12 +47,18 @@ class ClientLister:
     @staticmethod
     def accept_connection(sock, mask, sel, **kwargs):
         conn, addr = sock.accept()
+        log.info('New client {0[0]}:{0[1]}'.format(addr))
         conn.setblocking(False)
         sel.register(conn, selectors.EVENT_READ, ClientLister.read)
         kwargs['add_cb'](conn)
 
     @staticmethod
     def read(conn, mask, sel, **kwargs):
+        try:
+            log.info('Lost client {0[0]}:{0[1]}'.format(conn.getpeername()))
+        except:
+            log.info('Lost client {}'.format(conn))
+
         sel.unregister(conn)
         conn.close()
         kwargs['remove_cb'](conn)
@@ -82,6 +90,7 @@ class ClientLister:
         self.stop_fd_read, self.stop_fd_write = pipe()
         self.sel.register(self.stop_fd_read, selectors.EVENT_READ, self._terminate)
 
+        log.info('Server thread listening on port {}'.format(port))
         self.is_ready.set()
 
         while self.is_running:
@@ -90,6 +99,8 @@ class ClientLister:
             for key, mask in events:
                 key.data(key.fileobj, mask, self.sel,
                          add_cb = add_cb, remove_cb = remove_cb)
+
+        log.info('Server thread terminates')
 
 class Event:
     def __init__(self, endpoint, **kwargs):
@@ -132,8 +143,11 @@ class EventDispatcher:
     def put(self, ev):
         if ev is not None:
             self.events.put(ev)
+        else:
+            log.warning('Not putting empty event into queue')
 
     def worker(self, clients_manager):
+        log.info('Event dispatcher thread running')
         self.is_ready.set()
 
         while self.events:
@@ -147,18 +161,24 @@ class EventDispatcher:
             self.events.task_done()
 
             message_as_bytes = bytes(message, 'UTF-8')
-
             bad_connections = []
 
             with clients_manager as clients:
+                log.debug('Send event to {} clients'.format(len(clients)))
+
                 for c in clients:
+                    log.debug('Send to {}'.format(c))
+
                     try:
                         send_message_to_client(message_as_bytes, c)
                     except Exception as e:
+                        log.error('Error while sending data to client {}: {}'.format(c, e))
                         bad_connections.append(c)
 
             if bad_connections:
                 clients_manager.handle_bad_connections(bad_connections)
+
+        log.info('Event dispatcher thread terminates')
 
 class Monitor:
     def __init__(self):
@@ -182,6 +202,7 @@ class Monitor:
     def stop(self):
         with self.lock:
             if not self._is_started():
+                log.warning('Cannot stop monitor, already stopped')
                 return
 
             self.client_listener.stop()
@@ -208,8 +229,15 @@ class Monitor:
             del self.clients[conn]
 
     def handle_bad_connections(self, conns):
+        log.debug('Have {} bad connections'.format(len(conns)))
+
         with self.lock:
             for c in conns:
+                try:
+                    log.info('Kicking bad client {0[0]}:{0[1]}'.format(c.getpeername()))
+                except:
+                    log.info('Kicking bad client {}'.format(c))
+
                 self.client_listener.kick_client(c)
 
     def send(self, endpoint, **kwargs):

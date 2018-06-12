@@ -25,6 +25,8 @@ from threading import RLock
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import remove_directory
+from .utils import get_logger
+log = get_logger()
 
 def generate_file_info(file, checksums):
     expected = 'unavailable' if not checksums or file.name not in checksums else checksums[file.name]
@@ -37,6 +39,7 @@ def generate_file_info(file, checksums):
     h = sha256()
 
     if file.exists():
+        log.debug('Computing checksum of file {}'.format(file))
         with file.open('rb') as f:
             while True:
                 data = f.read(512 * 1024)
@@ -48,6 +51,7 @@ def generate_file_info(file, checksums):
 
         computed = h.hexdigest()
     else:
+        log.warning('File {} missing, cannot compute checksum'.format(file))
         computed = 'file missing'
 
     if expected != computed:
@@ -55,17 +59,44 @@ def generate_file_info(file, checksums):
 
     fi['is_valid'] = expected == computed
 
+    if fi['is_valid']:
+        log.debug('Checksum of file {} is valid'.format(file))
+    else:
+        log.error('Checksum of file {} is INVALID! Expected: {} - Computed: {}'.format(file, expected, computed))
+
     return fi
+
+def log_mount_attempt(mountpoint, result):
+    if result is MountResult.ALREADY_MOUNTED:
+        log.warning('Path {} is already mounted, operation in progress'.format(mountpoint))
+    elif result is MountResult.MOUNTED:
+        log.info('Successfully mounted {}'.format(mountpoint))
+    elif result is MountResult.FAILED:
+        log.critical('Mounting {} failed'.format(mountpoint))
+    elif result is MountResult.TIMEOUT:
+        log.critical('Mounting {} failed because of a timeout'.format(mountpoint))
+
+def log_unmount_attempt(mountpoint, result):
+    if result is UnmountResult.NOT_MOUNTED:
+        log.warning('Path {} is not mounted, cannot unmount'.format(mountpoint))
+    elif result is UnmountResult.UNMOUNTED:
+        log.info('Successfully unmounted {}'.format(mountpoint))
+    elif result is UnmountResult.FAILED:
+        log.critical('Unmounting {} failed'.format(mountpoint))
+    elif result is UnmountResult.TIMEOUT:
+        log.critical('Unmounting {} failed because of a timeout'.format(mountpoint))
 
 def get_info_and_verify(mountpoint, **values):
     p = mountpoint / 'images'
     mount_result = try_mount_partition(mountpoint)
+    log_mount_attempt(mountpoint, mount_result)
     version_info = None
     fileset = None
 
     if mount_result is MountResult.ALREADY_MOUNTED:
         overall_valid_state = 'locked'
     elif mount_result is MountResult.MOUNTED:
+        log.debug('Reading checksum file')
         temp = p / 'SHA256SUMS'
         checksums = None
         if temp.exists() and temp.is_file():
@@ -75,12 +106,17 @@ def get_info_and_verify(mountpoint, **values):
                     import re
                     checksum, filename = re.split(r' +', l.strip())
                     checksums[filename] = checksum
+        else:
+            log.error('Required file {} not found'.format(temp))
 
+        log.debug('Reading version file')
         temp = p / 'version.txt'
         version_file = None
         if temp.exists() and temp.is_file():
             with temp.open() as f:
                 version_file = f.readlines()
+        else:
+            log.error('Required file {} not found'.format(temp))
 
         if version_file and len(version_file) == 3:
             version_info = {
@@ -88,6 +124,12 @@ def get_info_and_verify(mountpoint, **values):
                 'timestamp': version_file[1].strip(),
                 'commit_id': version_file[2].strip(),
             }
+
+            log.info('Recovery data version {} as of {}, commit {}'.format(version_info['number'],
+                                                                           version_info['timestamp'],
+                                                                           version_info['commit_id']))
+        else:
+            log.error('No version information for recovery data')
 
         fileset = []
         fileset.append(generate_file_info(temp, checksums))
@@ -105,15 +147,20 @@ def get_info_and_verify(mountpoint, **values):
            }
 
 def verify_wrapper(**values):
+    log.info('Start verification of recovery data')
     mountpoint = Path('/mnt')
 
     try:
         version_info, status = get_info_and_verify(mountpoint, **values)
     except:
-        try_unmount_partition(mountpoint)
+        unmount_result = try_unmount_partition(mountpoint)
+        log_unmount_attempt(mountpoint, unmount_result)
+        log.error('Verification of recovery data failed')
         raise
 
-    try_unmount_partition(mountpoint)
+    unmount_result = try_unmount_partition(mountpoint)
+    log_unmount_attempt(mountpoint, unmount_result)
+    log.info('Verification of recovery data done: {}'.format(status['state']))
 
     return version_info, status
 
@@ -243,12 +290,15 @@ def create_workdir():
     return workdir
 
 def replace_recovery_system_data(request, status):
+    log.info('Start replacing recovery data')
     url_from_form = request.values.get('dataurl', None)
 
     if url_from_form:
+        log.info('Downloading recovery data from {}'.format(url_from_form))
         status.set_retrieving(url_from_form)
         file_from_form = None
     else:
+        log.info('Taking recovery data from HTTP stream')
         status.set_retrieving()
         file_from_form = get_data_file_from_form(request)
 
@@ -267,8 +317,10 @@ def replace_recovery_system_data(request, status):
         elif file_from_form:
             file_from_form.save(str(gpgfile))
         else:
+            log.error('No recovery data file specified')
             raise Exception('No data file specified')
 
+        log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
         import subprocess
 
@@ -278,47 +330,75 @@ def replace_recovery_system_data(request, status):
                                 str(gpgfile)],
                                 cwd = str(gpgfile.parent))
         if cmd.wait(600) != 0:
+            log.error('Invalid signature, rejecting downloaded recovery data')
             return jsonify(request, result = 'error', reason = 'invalid signature')
 
+        log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
         cmd = subprocess.Popen(['tar', 'tf', str(payload)])
         if cmd.wait(150) != 0:
+            log.error('Broken archive, rejecting downloaded recovery data')
             return jsonify(request, result = 'error', reason = 'broken archive')
 
         status.set_step_name('extracting')
         mountpoint = Path('/mnt')
         mount_result = try_mount_partition(mountpoint, True)
+        log_mount_attempt(mountpoint, mount_result)
+
+        succeeded = False
 
         if mount_result is MountResult.MOUNTED:
             is_mounted = True
 
+            log.warning('POINT OF NO RETURN: Deleting old recovery data')
             imgdir = mountpoint / 'images'
             remove_directory(imgdir, False)
 
+            log.info('Extracting recovery data archive')
             cmd = subprocess.Popen(['tar', 'xf', str(payload)], cwd = str(imgdir))
             if cmd.wait(300) != 0:
+                log.critical('Error while extracting recovery data archive')
                 result = jsonify(request, result = 'error', reason = 'write error')
             else:
+                succeeded = True
                 result = jsonify(request, result = 'success', reason = 'super hero')
         elif mount_result is MountResult.ALREADY_MOUNTED:
+            log.warning('Recovery data locked, cannot replace')
             result = jsonify(request, result = 'error', reason = 'locked')
         elif mount_result is MountResult.FAILED:
+            log.critical('Recovery data unaccessible in file system')
             result = jsonify(request, result = 'error', reason = 'inaccessible')
         elif mount_result is MountResult.TIMEOUT:
+            log.critical('Recovery data unaccessible in file system')
             result = jsonify(request, result = 'error', reason = 'mount timeout')
         else:
+            log.critical('Cannot replace recovery data due to some unknown error while mounting')
             result = jsonify(request, result = 'error', reason = 'unknown')
 
+        if succeeded:
+            log.info('Cleaning up to make new recovery data usable')
+        else:
+            log.info('Cleaning up')
+
         status.set_step_name('finalizing')
-        try_unmount_partition(mountpoint)
+        unmount_result = try_unmount_partition(mountpoint)
+        log_unmount_attempt(mountpoint, unmount_result)
         is_mounted = False
 
         remove_directory(workdir)
 
+        if succeeded:
+            log.info('Recovery data replaced successfully')
+        else:
+            log.error('Replacing recovery data FAILED')
+
         return result
-    except:
+    except Exception as e:
+        log.error('Replacing recovery data FAILED: {}'.format(e))
+
         if is_mounted:
-            try_unmount_partition(mountpoint)
+            unmount_result = try_unmount_partition(mountpoint)
+            log_unmount_attempt(mountpoint, unmount_result)
 
         remove_directory(workdir)
 

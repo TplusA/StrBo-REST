@@ -19,12 +19,21 @@
 
 import dbus
 
+from .utils import get_logger
+log = get_logger('D-Bus')
+
 def dbus_thread(dbh):
     if dbh._dbus_mainloop:
+        log.info('Thread running')
+        log.debug('Main loop ' + str(hex(dbh._dbus_mainloop)))
         dbh._glib_handle.g_main_loop_run(dbh._dbus_mainloop)
+
+    log.info('Thread terminates')
 
 class DBusHandler:
     def __init__(self):
+        log.debug('Init handler')
+
         from dbus.mainloop.glib import DBusGMainLoop, threads_init
         threads_init()
         loop = DBusGMainLoop(set_as_default = True)
@@ -50,6 +59,7 @@ class DBusHandler:
         glib = ctypes.CDLL('libglib-2.0.so.0',
                            mode = ctypes.RTLD_GLOBAL | RTLD_NOLOAD)
 
+        log.debug('GLib handle: ' + str(glib))
         glib.g_main_loop_new.argtypes = [ctypes.c_void_p, ctypes.c_bool]
         glib.g_main_loop_new.restype = ctypes.c_void_p
         glib.g_main_loop_unref.argtypes = [ctypes.c_void_p]
@@ -65,10 +75,12 @@ class DBusHandler:
         self._dbus_thread = threading.Thread(name = 'D-Bus worker',
                                              target = dbus_thread,
                                              args = (self,))
+        log.debug('Start thread ' + str(self._dbus_thread))
         self._dbus_thread.start()
 
     def stop(self):
         if not self._dbus_mainloop:
+            log.warning('Cannot stop D-Bus, already stopped')
             return
 
         self._glib_handle.g_main_loop_quit(self._dbus_mainloop)

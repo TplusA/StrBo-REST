@@ -22,9 +22,11 @@ import halogen
 
 from .endpoint import Endpoint
 from .utils import jsonify, jsonify_simple
+from .utils import get_logger
 from . import monitor
 from . import listerrors
 import strbo.dbus
+log = get_logger()
 
 service_curie = halogen.Curie(name = 'id', href = '/airable/service/{id}', templated = True)
 
@@ -128,6 +130,7 @@ class Services(Endpoint):
             iface = strbo.dbus.Interfaces.credentials_read()
             self.services = {c[0]: Service(c[0], c[1]) for c in iface.GetKnownCategories()}
         except:
+            log.error('Failed retrieving list of external services')
             self.clear()
             raise
 
@@ -202,6 +205,7 @@ class Info(Endpoint):
             self.services.refresh()
             self.are_data_available = True
         except:
+            log.error('Failed retrieving information about Airable')
             self.clear()
             raise
 

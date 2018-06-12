@@ -120,3 +120,33 @@ def jsonify_simple(*args, **kwargs):
         data = args or kwargs
 
     return json.dumps(data, skipkeys = True, ensure_ascii = False)
+
+def create_syslog_handler():
+    from logging.handlers import SysLogHandler
+    from logging import Formatter
+
+    h = SysLogHandler(address = '/dev/log')
+    f = Formatter('%(name)s: %(message)s')
+    h.setFormatter(f)
+
+    return h
+
+syslog_handler = create_syslog_handler()
+
+def get_logger(suffix = None, *, prefix = 'REST', full_name = None):
+    if full_name is not None:
+        name = full_name
+    elif suffix is None:
+        name = prefix
+    else:
+        name = prefix + '/' + suffix
+
+    import logging
+    log = logging.getLogger(name)
+
+    if not log.handlers:
+        log.addHandler(syslog_handler)
+
+    log.setLevel(logging.INFO)
+
+    return log

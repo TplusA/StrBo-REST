@@ -21,6 +21,8 @@ import halogen
 from threading import Lock
 
 from .endpoint import Endpoint
+from .utils import get_logger
+log = get_logger()
 
 class EntryPoint(Endpoint):
     """API Endpoint: Entry point to API."""
@@ -61,6 +63,8 @@ class StrBo:
 
         from .recovery import add_endpoints as add_recovery_endpoints
         add_recovery_endpoints()
+
+        log.info('Up and running')
 
     def start_monitor(self, server_port):
         # lock acquired late to avoid locking with each call; there is a
