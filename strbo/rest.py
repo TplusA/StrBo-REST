@@ -66,6 +66,16 @@ class StrBo:
 
         log.info('Up and running')
 
+    def close(self):
+        with self.lock:
+            if self.is_monitor_started:
+                from . import monitor
+                monitor.stop()
+                self.is_monitor_started = False
+
+            from .dbus import Bus
+            Bus().close()
+
     def start_monitor(self, server_port):
         # lock acquired late to avoid locking with each call; there is a
         # minuscule chance of entering this function multiple times, but this

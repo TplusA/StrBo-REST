@@ -67,11 +67,13 @@ class ClientLister:
         ClientLister.read(conn, None, self.sel, remove_cb = self.remove_client_cb)
 
     def stop(self):
-        self.stop_fd_write.write('\0')
+        from os import close
+        close(self.stop_fd_write)
+        close(self.stop_fd_read)
         self.thread.join()
         self.thread = None
 
-    def _terminate(self):
+    def _terminate(self, *args, **kwargs):
         self.is_running = False
 
     def worker(self, port, add_cb, remove_cb):
