@@ -17,24 +17,12 @@
 # You should have received a copy of the GNU General Public License
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
-from .rest import EntryPoint, StrBo
-from .endpoint import Endpoint, register_endpoint
-from .dbus import Bus
 from .monitor import Monitor
-
-MONITOR_PORT = 8468
 monitor = Monitor()
-monitor.start(MONITOR_PORT)
 
-# create the shared instance
+# create the shared D-Bus instance
+from .dbus import Bus
 Bus()
 
-register_endpoint(EntryPoint())
-
-from .airable import add_endpoints as add_airable_endpoints
-add_airable_endpoints()
-
-from .recovery import add_endpoints as add_recovery_endpoints
-add_recovery_endpoints()
-
+from .rest import StrBo
 app = StrBo()
