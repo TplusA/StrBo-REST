@@ -19,6 +19,11 @@
 
 from .rest import EntryPoint, StrBo
 from .endpoint import Endpoint, register_endpoint
+from .monitor import Monitor
+
+MONITOR_PORT = 8468
+monitor = Monitor()
+monitor.start(MONITOR_PORT)
 
 register_endpoint(EntryPoint())
 

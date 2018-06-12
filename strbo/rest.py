@@ -30,12 +30,16 @@ class EntryPoint(Endpoint):
         self = halogen.Link(attr = 'href')
         recovery = halogen.Link(halogen.types.List(Endpoint.Schema))
         api_version = halogen.Attr({'major': 1, 'minor': 0})
+        monitor_port = halogen.Attr()
 
     href = '/'
     methods = ('GET',)
 
     def __init__(self):
         Endpoint.__init__(self, 'entry_point')
+
+        from . import MONITOR_PORT
+        self.monitor_port = MONITOR_PORT
 
         from .recovery import all_endpoints as all_recovery_endpoints
         self.recovery = all_recovery_endpoints
