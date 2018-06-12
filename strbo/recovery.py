@@ -21,6 +21,7 @@ from pathlib import Path, PurePath
 from hashlib import sha256
 from time import time
 from threading import RLock
+from werkzeug.wrappers import Response
 
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
@@ -167,7 +168,7 @@ def verify_wrapper(**values):
 
 import halogen
 
-from .endpoint import Endpoint
+from .endpoint import Endpoint, url_for
 from .utils import jsonify
 
 class Status(Endpoint):
@@ -228,8 +229,18 @@ class Verify(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            if request.method == 'GET' or self.processing or self.rate_limit():
-                return jsonify(request, __class__.Schema.serialize(self))
+            if request.method == 'GET':
+                result = jsonify(request, __class__.Schema.serialize(self))
+            elif self.processing:
+                result = Response(status = 303)
+                result.location = url_for(request, self)
+            elif self.rate_limit():
+                result = Response(status = 429)
+            else:
+                result = None
+
+            if result:
+                return result
 
             self.processing = True
             self.failed = False
@@ -430,8 +441,16 @@ class Replace(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            if request.method == 'GET' or self.processing:
-                return jsonify(request, __class__.Schema.serialize(self))
+            if request.method == 'GET':
+                result = jsonify(request, __class__.Schema.serialize(self))
+            elif self.processing:
+                result = Response(status = 303)
+                result.location = url_for(request, self)
+            else:
+                result = None
+
+            if result:
+                return result
 
             self.processing = True
             self.step = 'receiving request'
