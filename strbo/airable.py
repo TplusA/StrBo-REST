@@ -49,7 +49,7 @@ class Service:
     def update_login_status(self, data):
         self.login_status = data
 
-class ServiceAny(Endpoint):
+class ServiceInfo(Endpoint):
     """API Endpoint: Accessing an external service provided by Airable.
 
     To avoid issues with (lack of) locking, this class should not accessed
@@ -106,7 +106,7 @@ class Services(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(self, 'airable_services', 'List of external streaming services available through Airable')
-        self.service_mapper = ServiceAny(self)
+        self.service_infos = ServiceInfo(self)
 
     def __call__(self, request = None, **values):
         cc = None if request is None else request.environ.get('HTTP_CACHE_CONTROL', None)
@@ -151,7 +151,7 @@ class Services(Endpoint):
 
     def get_json(self, **kwargs):
         with self.lock:
-            return self.service_mapper.get_json(**kwargs)
+            return self.service_infos.get_json(**kwargs)
 
     def update_login_status(self, id, data, send_to_monitor = True):
         with self.lock:
@@ -327,7 +327,7 @@ class Info(Endpoint):
             raise
 
 info_endpoint = Info()
-all_endpoints = [info_endpoint, info_endpoint.music_services, info_endpoint.music_services.service_mapper,
+all_endpoints = [info_endpoint, info_endpoint.music_services, info_endpoint.music_services.service_infos,
                  Auth(), Password(), Redirect()]
 
 def signal__external_service_login_status(service_id, actor_id, log_in, error_code, info):
