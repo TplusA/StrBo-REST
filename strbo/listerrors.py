@@ -53,11 +53,27 @@ def is_error(code):
     else:
         return code is not ErrorCode.OK
 
-def decode(code):
+def to_string(code):
     try:
         if isinstance(code, int):
-            code = ErrorCode(code)
+            code = int(code)
+            return ErrorCode(code).name
 
-        return code.name
+        if isinstance(code, ErrorCode):
+            return code.name
     except ValueError:
-        return "*** UNKNOWN: {} ***".format(code)
+        pass
+
+    return "*** UNKNOWN: {} ***".format(code)
+
+def to_code(code):
+    try:
+        if isinstance(code, int):
+            return ErrorCode(code)
+
+        if isinstance(code, ErrorCode):
+            return code
+    except ValueError:
+        pass
+
+    return ErrorCode.INTERNAL

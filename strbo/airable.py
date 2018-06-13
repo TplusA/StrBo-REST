@@ -18,6 +18,7 @@
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
 from threading import RLock
+from werkzeug.wrappers import Response
 import halogen
 
 from .endpoint import Endpoint
@@ -204,6 +205,67 @@ class Password(Endpoint):
             log.error('Failed generating Airable authentication URL')
             raise
 
+redirect_curie = halogen.Curie(name = 'path', href = '/airable/redirect/{path}', templated = True)
+
+class Redirect(Endpoint):
+    """API Endpoint: Follow Airable redirect found at given path, redirect to
+    URL the path redirects to.
+
+    Method ``GET``: Redirect to the URL the Airable path points to.
+    """
+    href = '/airable/redirect/<path:path>'
+    methods = ('GET',)
+
+    def __init__(self):
+        Endpoint.__init__(self, 'airable_redirect', 'Follow Airable redirect')
+        self.root_url = None
+
+    def __call__(self, request, path, **values):
+        try:
+            iface = strbo.dbus.Interfaces.airable()
+
+            if self.root_url is None:
+                self.root_url = iface.GetRootURL()
+
+            airable_url = '{}/{}'.format(self.root_url, path)
+            error_code, url = iface.ResolveRedirect(airable_url)
+
+            if listerrors.is_error(error_code):
+                result = jsonify(request,
+                                 path = path, url = airable_url,
+                                 error_code = error_code,
+                                 error = listerrors.to_string(error_code))
+
+                ec = listerrors.to_code(error_code)
+
+                if ec is listerrors.ErrorCode.INTERNAL:
+                    result.status_code = 500
+                elif ec is listerrors.ErrorCode.INTERRUPTED:
+                    result.status_code = 503
+                elif ec is listerrors.ErrorCode.NET_IO:
+                    result.status_code = 504
+                elif ec is listerrors.ErrorCode.PROTOCOL:
+                    result.status_code = 502
+                elif ec in [listerrors.ErrorCode.AUTHENTICATION,
+                            listerrors.ErrorCode.PERMISSION_DENIED]:
+                    result.status_code = 403
+                elif ec is listerrors.ErrorCode.NOT_SUPPORTED:
+                    result.status_code = 501
+                elif ec in [listerrors.ErrorCode.INVALID_URI,
+                            listerrors.ErrorCode.INVALID_STREAM_URL,
+                            listerrors.ErrorCode.INVALID_STRBO_URL]:
+                    result.status_code = 400
+                else:
+                    result.status_code = 404
+            else:
+                result = Response(status = 307)
+                result.location = url
+
+            return result
+        except:
+            log.error('Failed following Airable redirect')
+            raise
+
 class Info(Endpoint):
     """API Endpoint: Entry point for interfacing with Airable.
 
@@ -267,7 +329,7 @@ def signal__external_service_login_status(service_id, actor_id, log_in, error_co
 
     if listerrors.is_error(error_code):
         login_status['last_error_code'] = error_code
-        login_status['last_error'] = listerrors.decode(error_code)
+        login_status['last_error'] = listerrors.to_string(error_code)
 
     info_endpoint.services.update_login_status(service_id, login_status)
 
@@ -275,6 +337,7 @@ def add_endpoints():
     from .endpoint import register_endpoints, register_endpoint
     register_endpoints(all_endpoints)
     register_endpoint(info_endpoint.services.service_mapper)
+    register_endpoint(Redirect())
 
     strbo.dbus.Interfaces.airable().connect_to_signal('ExternalServiceLoginStatus',
                                                       signal__external_service_login_status)
