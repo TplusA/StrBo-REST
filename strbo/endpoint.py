@@ -36,9 +36,13 @@ class Endpoint:
     Attributes:
         id: Endpoint ID for Werkzeug. Set in constructor.
         title: Optional endpoint description. Set in constructor.
-        href: Derived classes shall define their path in this attribute.
-            Optionally, the path may also be passed to the constructor if
+        href: Derived classes shall define their path in this attribute. This
+            may also be a URI Template (RFC 6570), in which case
+            ``href_for_map`` must also be defined using Werkzeug syntax.
+            Optionally, this path may also be passed to the constructor if
             required, but static paths should be defined at class level.
+        href_for_map: Similar to ``href``, but using Werkzeug syntax for URL
+            routing. In case of plain URI, this attribute shall not be present.
         methods: Derived classes shall explicitly define the methods allowed
             for the endpoint in their 'methods' attribute (``GET``, ``POST``,
             etc.). We do not want to rely on defaults imposed by Werkzeug.
@@ -46,17 +50,24 @@ class Endpoint:
     class Schema(halogen.Schema):
         href = halogen.Attr()
         title = halogen.Attr(required = False)
+        templated = halogen.Attr(attr = lambda value: len(value.href_for_map) > 0, required = False)
 
-    def __init__(self, id, title = None, *, href = None):
+    def __init__(self, id, title = None, *, href = None, href_for_map = None):
         self.id = id
 
         if href:
             self.href = href
 
+        if href_for_map:
+            self.href_for_map = href_for_map
+
         if not hasattr(self, 'href'):
             raise Exception("No href defined")
         elif not self.href:
             raise Exception("Empty href")
+
+        if hasattr(self, 'href_for_map') and not self.href_for_map:
+            raise Exception("Empty href_for_map")
 
         if not hasattr(self, 'methods'):
             raise Exception("No methods defined")
@@ -73,7 +84,7 @@ url_map = Map()
 dispatchers = {}
 
 def register_endpoint(e):
-    url_map.add(Rule(e.href, endpoint = e.id, methods = e.methods))
+    url_map.add(Rule(getattr(e, 'href_for_map', e.href), endpoint = e.id, methods = e.methods))
 
     dispatchers[e.id] = e
 

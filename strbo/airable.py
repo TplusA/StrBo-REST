@@ -29,15 +29,17 @@ from . import listerrors
 import strbo.dbus
 log = get_logger()
 
-service_curie = halogen.Curie(name = 'id', href = '/airable/service/{id}', templated = True)
-
 class Service:
     """Information about a service accessible through Airable."""
     class Schema(halogen.Schema):
-        self = halogen.Link(attr = 'id', curie = service_curie)
+        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id)
         id = halogen.Attr()
         description = halogen.Attr()
         login_status = halogen.Attr()
+
+    class SchemaShort(halogen.Schema):
+        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id)
+        id = halogen.Attr()
 
     def __init__(self, id, description):
         self.id = id
@@ -53,12 +55,13 @@ class ServiceAny(Endpoint):
     To avoid issues with (lack of) locking, this class should not accessed
     directly, but through the ``Services`` class.
     """
-    href = '/airable/service/<id>'
+    href = '/airable/service/{id}'
+    href_for_map = '/airable/service/<id>'
     methods = ('GET',)
     lock = RLock()
 
     def __init__(self, services):
-        Endpoint.__init__(self, 'airable_service', 'Airable external service')
+        Endpoint.__init__(self, 'airable_service', 'Accessing a specific Airable external streaming service')
         self.services = services
 
     def __call__(self, request, id, **values):
@@ -89,7 +92,11 @@ class Services(Endpoint):
     """
     class Schema(halogen.Schema):
         self = halogen.Link(attr = 'href')
-        services = halogen.Attr(attr=lambda value: {id: Service.Schema.serialize(value.services[id]) for id in value.services} if value.services is not None else None)
+        services = halogen.Embedded(halogen.types.List(Service.Schema), attr = lambda value: [value.services[id] for id in value.services], required = False)
+
+    class SchemaShort(halogen.Schema):
+        self = halogen.Link(attr = 'href')
+        services = halogen.Embedded(halogen.types.List(Service.SchemaShort), attr = lambda value: [value.services[id] for id in value.services], required = False)
 
     href = '/airable/services'
     methods = ('GET',)
@@ -98,7 +105,7 @@ class Services(Endpoint):
     services = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_services', 'Airable external services')
+        Endpoint.__init__(self, 'airable_services', 'List of external streaming services available through Airable')
         self.service_mapper = ServiceAny(self)
 
     def __call__(self, request = None, **values):
@@ -163,7 +170,8 @@ class Auth(Endpoint):
 
     Method ``GET``: Return authentication URL.
     """
-    href = '/airable/authentication'
+    href = '/airable/authentication{?locale}'
+    href_for_map = '/airable/authentication'
     methods = ('GET',)
 
     def __init__(self):
@@ -184,7 +192,8 @@ class Password(Endpoint):
 
     Method ``GET``: Return password based on token and timestamp.
     """
-    href = '/airable/password'
+    href = '/airable/password{?token,time}'
+    href_for_map = '/airable/password'
     methods = ('GET',)
 
     def __init__(self):
@@ -205,15 +214,14 @@ class Password(Endpoint):
             log.error('Failed generating Airable authentication URL')
             raise
 
-redirect_curie = halogen.Curie(name = 'path', href = '/airable/redirect/{path}', templated = True)
-
 class Redirect(Endpoint):
     """API Endpoint: Follow Airable redirect found at given path, redirect to
     URL the path redirects to.
 
     Method ``GET``: Redirect to the URL the Airable path points to.
     """
-    href = '/airable/redirect/<path:path>'
+    href = '/airable/redirect/{+path}'
+    href_for_map = '/airable/redirect/<path:path>'
     methods = ('GET',)
 
     def __init__(self):
@@ -275,7 +283,7 @@ class Info(Endpoint):
     class Schema(halogen.Schema):
         self = halogen.Link(attr = 'href')
         root_url = halogen.Attr()
-        services = halogen.Attr(Services.Schema)
+        music_services = halogen.Embedded(Services.SchemaShort)
 
     href = '/airable'
     methods = ('GET',)
@@ -283,7 +291,7 @@ class Info(Endpoint):
 
     are_data_available = False
     root_url = None
-    services = Services()
+    music_services = Services()
 
     def __init__(self):
         Endpoint.__init__(self, 'airable_info', 'Interfacing with Airable')
@@ -303,7 +311,7 @@ class Info(Endpoint):
     def clear(self):
         self.are_data_available = False
         self.root_url = None
-        self.services.clear()
+        self.music_services.clear()
 
     def refresh(self):
         self.clear()
@@ -311,7 +319,7 @@ class Info(Endpoint):
         try:
             iface = strbo.dbus.Interfaces.airable()
             self.root_url = iface.GetRootURL()
-            self.services.refresh()
+            self.music_services.refresh()
             self.are_data_available = True
         except:
             log.error('Failed retrieving information about Airable')
@@ -319,7 +327,8 @@ class Info(Endpoint):
             raise
 
 info_endpoint = Info()
-all_endpoints = [info_endpoint, info_endpoint.services, Auth(), Password()]
+all_endpoints = [info_endpoint, info_endpoint.music_services, info_endpoint.music_services.service_mapper,
+                 Auth(), Password(), Redirect()]
 
 def signal__external_service_login_status(service_id, actor_id, log_in, error_code, info):
     login_status = {
@@ -331,13 +340,11 @@ def signal__external_service_login_status(service_id, actor_id, log_in, error_co
         login_status['last_error_code'] = error_code
         login_status['last_error'] = listerrors.to_string(error_code)
 
-    info_endpoint.services.update_login_status(service_id, login_status)
+    info_endpoint.music_services.update_login_status(service_id, login_status)
 
 def add_endpoints():
     from .endpoint import register_endpoints, register_endpoint
     register_endpoints(all_endpoints)
-    register_endpoint(info_endpoint.services.service_mapper)
-    register_endpoint(Redirect())
 
     strbo.dbus.Interfaces.airable().connect_to_signal('ExternalServiceLoginStatus',
                                                       signal__external_service_login_status)
