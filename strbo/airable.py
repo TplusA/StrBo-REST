@@ -29,11 +29,81 @@ from . import listerrors
 import strbo.dbus
 log = get_logger()
 
+class Credentials(Endpoint):
+    """API Endpoint: Management of credentials for external music services."""
+    class Data:
+        def __init__(self, id):
+            iface = strbo.dbus.Interfaces.credentials_read()
+            self.username, self.password = iface.GetDefaultCredentials(id)
+            self.id = id
+
+            if not self.username:
+                self.username = None
+                self.password = None
+
+    class Schema(halogen.Schema):
+        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id + '/credentials')
+        id = halogen.Attr()
+        username = halogen.Attr()
+        password = halogen.Attr()
+
+    class SchemaShort(halogen.Schema):
+        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id + '/credentials')
+
+    href = '/airable/service/{id}/credentials'
+    href_for_map = '/airable/service/<id>/credentials'
+    methods = ('GET', 'PUT')
+    lock = RLock()
+
+    def __init__(self):
+        Endpoint.__init__(self, 'airable_service_credentials', 'Management of credentials for external music services')
+
+    def __call__(self, request, id, **values):
+        if request.method == 'GET':
+            return jsonify(request, Credentials.Schema.serialize(Credentials.Data(id)))
+
+        with self.lock:
+            userpass = request.json
+
+            # input sanitation
+            try:
+                if userpass:
+                    username = userpass['username']
+                    password = userpass['password']
+
+                    if not isinstance(username, str) or not isinstance(password, str):
+                        raise TypeError("User name and password must be strings")
+
+                    if not username:
+                        raise ValueError("Empty user name")
+            except Exception as e:
+                return Response('Exception: ' + str(e), status = 400)
+
+            # update credentials database
+            try:
+                wcred_iface = strbo.dbus.Interfaces.credentials_write()
+                login_iface = strbo.dbus.Interfaces.airable()
+
+                LOGIN_LOGOUT_ACTOR_ID = 3
+
+                if userpass:
+                    wcred_iface.SetCredentials(id, username, password, True)
+                    login_iface.ExternalServiceLogout(id, "", True, LOGIN_LOGOUT_ACTOR_ID)
+                    login_iface.ExternalServiceLogin(id, username, True, LOGIN_LOGOUT_ACTOR_ID)
+                else:
+                    wcred_iface.DeleteCredentials(id, "")
+                    login_iface.ExternalServiceLogout(id, "", True, LOGIN_LOGOUT_ACTOR_ID)
+            except Exception as e:
+                return Response('Exception: ' + str(e), status = 500)
+
+        return Response(status = 204)
+
 class Service:
     """Information about a service accessible through Airable."""
     class Schema(halogen.Schema):
         self = halogen.Link(attr = lambda value: '/airable/service/' + value.id)
         id = halogen.Attr()
+        credentials = halogen.Embedded(Credentials.SchemaShort, attr = lambda value: value)
         description = halogen.Attr()
         login_status = halogen.Attr()
 
@@ -328,7 +398,7 @@ class Info(Endpoint):
 
 info_endpoint = Info()
 all_endpoints = [info_endpoint, info_endpoint.music_services, info_endpoint.music_services.service_infos,
-                 Auth(), Password(), Redirect()]
+                 Credentials(), Auth(), Password(), Redirect()]
 
 def signal__external_service_login_status(service_id, actor_id, log_in, error_code, info):
     login_status = {
