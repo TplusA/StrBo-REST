@@ -164,3 +164,8 @@ class Interfaces:
     def credentials_read():
         return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Read')
+
+    @staticmethod
+    def credentials_write():
+        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
+                                               'de.tahifi.Credentials.Write')
