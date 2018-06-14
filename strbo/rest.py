@@ -49,6 +49,20 @@ class EntryPoint(Endpoint):
         from .utils import jsonify
         return jsonify(request, __class__.Schema.serialize(self))
 
+from werkzeug.utils import cached_property
+from werkzeug.wrappers import Request
+
+class JSONRequest(Request):
+    max_content_length = 512 * 1024
+
+    @cached_property
+    def json(self):
+        if self.headers.get('content-type') == 'application/json':
+            from json import loads
+            return loads(self.data.decode("utf-8"))
+        else:
+            return None
+
 class StrBo:
     def __init__(self):
         self.lock = Lock()
@@ -101,7 +115,7 @@ class StrBo:
 
         from werkzeug.wrappers import Request
         from .endpoint import dispatch
-        request = Request(environ)
+        request = JSONRequest(environ)
         response = dispatch(request)
         return response(environ, start_response)
 
