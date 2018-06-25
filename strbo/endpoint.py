@@ -21,6 +21,40 @@ from werkzeug.wrappers import Request
 from werkzeug.routing import Map, Rule
 import halogen
 
+class Error(Exception):
+    def __init__(self, message, ep = None, ep_name = None, just_the_message = False):
+        if not message:
+            self.message = "Unknown error"
+        elif isinstance(ep, Endpoint):
+            self.message = message + ' endpoint ID {}'.format(ep.id)
+        elif ep is not None:
+            self.message = message + ' non-endpoint {}'.format(ep)
+        elif isinstance(ep_name, str):
+            self.message = message + ' endpoint {}'.format(ep_name)
+        elif just_the_message:
+            self.message = message
+        else:
+            self.message = message + ' unknown endpoint'
+
+class GenericError(Error):
+    def __init__(self, message, ep = None, ep_name = None):
+        Error.__init__(self, message, ep, ep_name, just_the_message = True)
+
+class NotCallableError(Error):
+    def __init__(self, ep = None, ep_name = None):
+        if isinstance(ep, Endpoint):
+            Error.__init__(self, "Not callable at {}:".format(ep.href), ep, ep_name)
+        else:
+            Error.__init__(self, "Not callable:", ep, ep_name)
+
+class SerializeError(Error):
+    def __init__(self, ep = None, ep_name = None):
+        Error.__init__(self, 'Failed serializing', ep, ep_name)
+
+class EmptyError(Error):
+    def __init__(self, ep = None, ep_name = None):
+        Error.__init__(self, 'Have no data for', ep, ep_name)
+
 class Endpoint:
     """Definition of an API endpoint.
 
@@ -62,23 +96,23 @@ class Endpoint:
             self.href_for_map = href_for_map
 
         if not hasattr(self, 'href'):
-            raise Exception("No href defined")
+            raise GenericError('No href defined', self)
         elif not self.href:
-            raise Exception("Empty href")
+            raise GenericError('Empty href', self)
 
         if hasattr(self, 'href_for_map') and not self.href_for_map:
-            raise Exception("Empty href_for_map")
+            raise GenericError('Empty href_for_map', self)
 
         if not hasattr(self, 'methods'):
-            raise Exception("No methods defined")
+            raise GenericError('No methods defined', self)
         elif not self.methods:
-            raise Exception("Empty methods")
+            raise GenericError('Empty methods', self)
 
         if title:
             self.title = title
 
     def __call__(self, request, **values):
-        raise Exception("Endpoint '" + self.id + "' at " + self.href + " not callable")
+        raise NotCallableError(self)
 
 url_map = Map()
 dispatchers = {}

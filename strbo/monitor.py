@@ -159,8 +159,21 @@ class EventDispatcher:
                 self.events.task_done()
                 break
 
-            message = ev.endpoint.get_json(**ev.kwargs)
+            from .endpoint import SerializeError, EmptyError
+
+            try:
+                message = ev.endpoint.get_json(**ev.kwargs)
+            except (SerializeError, EmptyError) as e:
+                log.error('Endpoint exception while processing event: {}'.format(e.message))
+                message = None
+            except Exception as e:
+                log.error('Exception exception while processing event: {}'.format(e.message))
+                message = None
+
             self.events.task_done()
+
+            if message is None:
+                continue
 
             message_as_bytes = bytes(message, 'UTF-8')
             bad_connections = []

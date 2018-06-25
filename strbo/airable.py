@@ -148,7 +148,8 @@ class ServiceInfo(Endpoint):
             service = self.services.get_service_by_id(kwargs['service_id'])
 
             if service is None:
-                return jsonify_simple({})
+                from .endpoint import EmptyError
+                raise EmptyError(self)
 
             return jsonify_simple(Service.Schema.serialize(service))
 
