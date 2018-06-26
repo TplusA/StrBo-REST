@@ -22,7 +22,9 @@ import dbus
 from .utils import get_logger
 log = get_logger('D-Bus')
 
-def dbus_thread(dbh):
+def _dbus_worker(dbh):
+    """The main function of the thread created in the :class:`DBusHandler`
+    constructor."""
     if dbh._dbus_mainloop:
         log.info('Thread running')
         log.debug('Main loop ' + str(hex(dbh._dbus_mainloop)))
@@ -31,6 +33,7 @@ def dbus_thread(dbh):
     log.info('Thread terminates')
 
 class DBusHandler:
+    """A thread for handling D-Bus signals."""
     def __init__(self):
         log.debug('Init handler')
 
@@ -73,12 +76,13 @@ class DBusHandler:
 
         import threading
         self._dbus_thread = threading.Thread(name = 'D-Bus worker',
-                                             target = dbus_thread,
+                                             target = _dbus_worker,
                                              args = (self,))
         log.debug('Start thread ' + str(self._dbus_thread))
         self._dbus_thread.start()
 
     def stop(self):
+        """Stop the D-Bus main loop and worker thread."""
         if not self._dbus_mainloop:
             log.warning('Cannot stop D-Bus, already stopped')
             return
@@ -89,12 +93,26 @@ class DBusHandler:
         self._dbus_thread = None
 
 class Bus(dbus.bus.BusConnection):
+    """The D-Bus instance. We always use this one.
+
+    We must use this class derived from :class:`dbus.bus.BusConnection` because
+    there is no way for telling the regular D-Bus classes defined in the
+    :mod:`dbus` module how to connect with our D-Bus daemon.
+
+    This, and we also need a thread for receiving and processing D-Bus signals.
+    Such a thread is managed by a :class:`DBusHandler` object, which is created
+    as a member of our :class:`Bus` class. On :meth:`close()`, this thread is
+    stopped as well.
+    """
     _shared_instance = None
-    _dbus_handler = DBusHandler()
+    _dbus_handler = None
 
     def __new__(cls, private = False, mainloop = None):
         if not private and cls._shared_instance:
             return cls._shared_instance
+
+        if not cls._shared_instance:
+            Bus._dbus_handler = DBusHandler()
 
         bus = dbus.bus.BusConnection.__new__(Bus, 'unix:path=/tmp/strbo_bus_socket', mainloop = mainloop)
 
@@ -104,6 +122,7 @@ class Bus(dbus.bus.BusConnection):
         return bus
 
     def close(self):
+        """Shut down D-Bus."""
         if Bus._shared_instance is self:
             Bus._shared_instance = None
         super(Bus, self).close()
@@ -132,10 +151,19 @@ class ProxyWithInterfaces:
         return iface
 
 class InterfaceCache:
+    """Cache of proxies to D-Bus objects.
+
+    Creating proxies to D-Bus objects always triggers D-Bus introspection,
+    enabling the :mod:`dbus` module to generate callable functions based on
+    exported D-Bus interfaces. This is a great feature to have, but it implies
+    that creating a new proxy is a quite expensive operation, plus constant
+    introspection makes D-Bus monitoring harder than necessary. Therefore, we
+    strive to minimize the amount of proxy creation by caching them.
+    """
     def __init__(self):
         self.proxies_with_interfaces = {}
 
-    def get_proxy_with_interfaces(self, bus_name, object_path):
+    def _get_proxy_with_interfaces(self, bus_name, object_path):
         pwi = self.proxies_with_interfaces.get((bus_name, object_path), None)
 
         if not pwi:
@@ -147,25 +175,42 @@ class InterfaceCache:
         return pwi
 
     def get_interface(self, bus_name, object_path, iface_name):
-        return self.get_proxy_with_interfaces(bus_name, object_path).get_interface(iface_name)
+        """Lookup existing or create new proxy to object.
+
+        Any newly created proxy instance is stored in the cache.
+        """
+        return self._get_proxy_with_interfaces(bus_name, object_path).get_interface(iface_name)
 
     def remove_proxy(self, bus_name, object_path):
+        """Remove proxy to object at given path `object_path` on connection
+        with given bus name `bus_name`.
+
+        Use this function to remove temporary or defunct proxies from the
+        cache."""
         del self.proxies_with_interfaces[(bus_name, object_path)]
 
 class Interfaces:
+    """Collection of convenience functions for retrieval of specific D-Bus
+    objects.
+
+    The objects returned by these functions are cached in an :class:`InterfaceCache` object.
+    """
     _cache = InterfaceCache()
 
     @staticmethod
     def airable():
+        """Proxy to Airable list broker (``de.tahifi.Airable``)."""
         return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Airable')
 
     @staticmethod
     def credentials_read():
+        """Proxy to Airable list broker (``de.tahifi.Credentials.Read``)."""
         return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Read')
 
     @staticmethod
     def credentials_write():
+        """Proxy to Airable list broker (``de.tahifi.Credentials.Write``)."""
         return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Write')

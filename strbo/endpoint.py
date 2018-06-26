@@ -22,8 +22,28 @@ from werkzeug.routing import Map, Rule
 import halogen
 
 class Error(Exception):
+    """Base class for exceptions thrown by :mod:`strbo.endpoint`.
+
+    ``message`` is an error description string, used as prefix of the final
+    message stored in the exception. If left empty, then a generic message is
+    inserted.
+
+    ``ep`` is an :class:`Endpoint` instance, some object with a string
+    representation, or ``None``. The exception message will vary according to
+    the value of ``ep``.
+
+    ``ep_name`` is an alternative way to pass an endpoint name in case no
+    proper :class:`Endpoint` instance is within reach. It is only considered if
+    ``ep`` is ``None`` and if ``ep_name`` is a string, otherwise this parameter
+    will be ignored.
+
+    Set ``just_the_message`` to ``True`` to use ``message`` as final exception
+    message string so that nothing will be appended to ``message``. This flag
+    is only considered if both, ``ep`` and ``ep_name``, are ``None``.
+    """
     def __init__(self, message, ep = None, ep_name = None, just_the_message = False):
         if not message:
+            #: Formatted exception message.
             self.message = "Unknown error"
         elif isinstance(ep, Endpoint):
             self.message = message + ' endpoint ID {}'.format(ep.id)
@@ -37,10 +57,13 @@ class Error(Exception):
             self.message = message + ' unknown endpoint'
 
 class GenericError(Error):
+    """Any kind of error that doesn't fit into the more specific errors."""
     def __init__(self, message, ep = None, ep_name = None):
         Error.__init__(self, message, ep, ep_name, just_the_message = True)
 
 class NotCallableError(Error):
+    """Thrown if an :class:`Endpoint` is called which doesn't override
+    :meth:`Endpoint.__call__`."""
     def __init__(self, ep = None, ep_name = None):
         if isinstance(ep, Endpoint):
             Error.__init__(self, "Not callable at {}:".format(ep.href), ep, ep_name)
@@ -48,51 +71,98 @@ class NotCallableError(Error):
             Error.__init__(self, "Not callable:", ep, ep_name)
 
 class SerializeError(Error):
+    """Thrown in case a resource at some :class:`Endpoint` cannot be
+    serialized as JSON object.
+
+    This exception is thrown in conjunction with the monitoring mechanism.
+    """
     def __init__(self, ep = None, ep_name = None):
         Error.__init__(self, 'Failed serializing', ep, ep_name)
 
 class EmptyError(Error):
+    """Thrown in case a resource at some :class:`Endpoint` is empty when it
+    shouldn't be.
+
+    This might be the case if the resource does not exist or if it requires
+    some parameter which is wrong or missing.
+
+    This exception is thrown in conjunction with the monitoring mechanism.
+    """
     def __init__(self, ep = None, ep_name = None):
         Error.__init__(self, 'Have no data for', ep, ep_name)
 
 class Endpoint:
     """Definition of an API endpoint.
 
-    This class also defines a simple Halogen schema for links to self.
+    Parameters:
+        ``id`` is a non-empty string defining the endpoint ID. It is used to
+        initialize object attribute :attr:`id`.
+
+        ``title`` is an optional string containing a short description of this
+        endpoint. May also be ``None``.
+
+        ``href`` is a string defining the URL path to this endpoint. It is the
+        initializer for object attribute :attr:`href`. In case the deriving
+        class presets the :attr:`href` attribute with a non-empty value (which
+        is to be preferred if at all possible), this parameter is optional and
+        may be used to override the preset; otherwise, a non-empty string must
+        be passed.
+
+        ``href_for_map`` is an optional string defining the URL path as a
+        pattern for use with :mod:`werkzeug`, stored in attribute
+        :attr:`href_for_map`. If a URI Template is passed in the `href`
+        parameter, then most likely this parameter will have to be set as well,
+        expressing the URI Template in syntax suitable for :mod:`werkzeug`. See
+        also :class:`werkzeug.routing.Rule`.
 
     All StrBo endpoints should derive from this class. It contains the most
-    basic data about endpoints required by Werkzeug and Halogen to build our
-    API.
+    basic data about endpoints required by :mod:`werkzeug` and :mod:`halogen`
+    to build our API.
 
-    Use functions `register_endpoint` or `register_endpoints` to register any
-    API endpoints.
+    Derived classes shall explicitly define the HTTP methods allowed for the
+    endpoint (``GET``, ``POST``, etc.) in the :attr:`methods` attribute of
+    their objects. We cannot rely on defaults imposed by :mod:`werkzeug`.
 
-    Attributes:
-        id: Endpoint ID for Werkzeug. Set in constructor.
-        title: Optional endpoint description. Set in constructor.
-        href: Derived classes shall define their path in this attribute. This
-            may also be a URI Template (RFC 6570), in which case
-            ``href_for_map`` must also be defined using Werkzeug syntax.
-            Optionally, this path may also be passed to the constructor if
-            required, but static paths should be defined at class level.
-        href_for_map: Similar to ``href``, but using Werkzeug syntax for URL
-            routing. In case of plain URI, this attribute shall not be present.
-        methods: Derived classes shall explicitly define the methods allowed
-            for the endpoint in their 'methods' attribute (``GET``, ``POST``,
-            etc.). We do not want to rely on defaults imposed by Werkzeug.
+    An :class:`Endpoint` is callable. Derived classes must override the
+    :meth:`Endpoint.__call__` method as the default implementation simply
+    throws an exception. This method is passed an WSGI which it is supposed to
+    process.
+
+    Use functions :func:`register_endpoint` or :func:`register_endpoints` to
+    register an API endpoint, i.e., any object of this class, with
+    :mod:`werkzeug`.
+
+    This class also defines a simple :class:`halogen.schema.Schema` for
+    generating links to ``self``.
     """
+
     class Schema(halogen.Schema):
+        """Simple schema for generating links to ``self``."""
         href = halogen.Attr()
         title = halogen.Attr(required = False)
         templated = halogen.Attr(attr = lambda value: len(value.href_for_map) > 0, required = False)
 
     def __init__(self, id, title = None, *, href = None, href_for_map = None):
+        #: Endpoint ID for :mod:`werkzeug`.
         self.id = id
 
         if href:
+            #: Derived classes shall define their path in this attribute.
+            #: This string may also be a URI Template (RFC 6570), in which case
+            #: :attr:`href_for_map` must also be defined using :mod:`werkzeug`
+            #: syntax (see :class:`werkzeug.routing.Rule`).
+            #
+            #: Optionally, this path may also be passed to the constructor if
+            #: required, but static paths should be preferred, if possible, and
+            #: preset by the derived class.
             self.href = href
 
         if href_for_map:
+            #: Similar to :attr:`href`, but using :mod:`werkzeug` syntax for
+            #: URL routing. If :attr:`href` contains a plain URI, then this
+            #: attribute shall not be #: present at all. As with :attr:`href`,
+            #: static definition of :attr:`href_for_map` in the derived class
+            #: is preferable over passing it through the constructor.
             self.href_for_map = href_for_map
 
         if not hasattr(self, 'href'):
@@ -109,6 +179,8 @@ class Endpoint:
             raise GenericError('Empty methods', self)
 
         if title:
+            #: Optional endpoint description serving as documentation when
+            #: navigating the API.
             self.title = title
 
     def __call__(self, request, **values):
@@ -118,20 +190,44 @@ url_map = Map()
 dispatchers = {}
 
 def register_endpoint(e):
+    """Register one endpoint."""
     url_map.add(Rule(getattr(e, 'href_for_map', e.href), endpoint = e.id, methods = e.methods))
 
     dispatchers[e.id] = e
 
 def register_endpoints(es):
+    """Register a set of endpoints."""
     for e in es:
         register_endpoint(e)
 
 def dispatch(request):
+    """Dispatch one request of type :class:`werkzeug.wrappers.Request`.
+
+    This function must be called for each WSGI request passed into our
+    application. Basically, it matches the URL in the WSGI request against the
+    hrefs of all registered :class:`Endpoint` objects, and calls the matching
+    :class:`Endpoint`, if any, or throws an exception in case no
+    :class:`Endpoint` is found for the URL.
+    """
     adapter = url_map.bind_to_environ(request.environ)
     id, values = adapter.match()
     return dispatchers[id](request, **values)
 
 def url_for(environ_or_request, endpoint):
+    """Generate a URL for an :class:`Endpoint`.
+
+    Never, ever try to generate URLs by hand, always use this function. This
+    function hands over :attr:`Endpoint.id` to :mod:`werkzeug` to generate
+    URLs; thus, whenever an :attr:`Endpoint.href` is changed, this function
+    will still return valid URLs. Whenever a new :class:`Endpoint` is added, it
+    can automatically be handled by this function, and whenever an endpoint is
+    removed, a meaningful error is thrown.
+
+    This function requires a WSGI request or a WSGI environment to work. This
+    is because URLs can only be generated given some context to incorporate the
+    original request URL. In practice, this should never be a problem; if it
+    is, then its most likely a problem with the API design.
+    """
     if isinstance(environ_or_request, Request):
         adapter = url_map.bind_to_environ(environ_or_request.environ)
     else:

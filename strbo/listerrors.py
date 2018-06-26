@@ -21,6 +21,7 @@ from enum import Enum, unique
 
 @unique
 class ErrorCode(Enum):
+    """Error codes used throughout the StrBo software stack."""
     OK                 = 0
     INTERNAL           = 1
     INTERRUPTED        = 2
@@ -48,12 +49,25 @@ class ErrorCode(Enum):
     NOT_FOUND          = 24
 
 def is_error(code):
+    """Check whether or not the given error code is actually an error.
+
+    The `code` may be either an :class:`ErrorCode` or a plain integer.
+    Note that no range check will be performed for plain integers.
+    """
     if isinstance(code, int):
         return code != 0
     else:
         return code is not ErrorCode.OK
 
 def to_string(code):
+    """Convert error code to string representation, no exceptions thrown.
+
+    The `code` may be either an :class:`ErrorCode` or a plain integer.
+
+    If `code` is an integer which is out of range, or if `code` is not an
+    instance of :class:`ErrorCode`, then a distinguishable string hinting at
+    the problem with `code` is returned.
+    """
     try:
         if isinstance(code, int):
             code = int(code)
@@ -64,9 +78,20 @@ def to_string(code):
     except ValueError:
         pass
 
-    return "*** UNKNOWN: {} ***".format(code)
+    try:
+        return "*** UNKNOWN: {} ***".format(code)
+    except Exception:
+        return "*** UNKNOWN ERROR CODE WITH NO STRING REPRESENTATION ***"
 
 def to_code(code):
+    """Convert integer code to :class:`ErrorCode`.
+
+    In case the integer passed in `code` is out of range, no exception is
+    thrown and ``ErrorCode.INTERNAL`` is returned.
+
+    For convenience, it is permissible to pass :class:`ErrorCode` instances in
+    `code`, in which case this function will simply return `code`.
+    """
     try:
         if isinstance(code, int):
             return ErrorCode(code)

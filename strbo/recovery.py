@@ -29,7 +29,7 @@ from .utils import remove_directory
 from .utils import get_logger
 log = get_logger()
 
-def generate_file_info(file, checksums):
+def _generate_file_info(file, checksums):
     expected = 'unavailable' if not checksums or file.name not in checksums else checksums[file.name]
 
     fi = {
@@ -67,7 +67,7 @@ def generate_file_info(file, checksums):
 
     return fi
 
-def log_mount_attempt(mountpoint, result):
+def _log_mount_attempt(mountpoint, result):
     if result is MountResult.ALREADY_MOUNTED:
         log.warning('Path {} is already mounted, operation in progress'.format(mountpoint))
     elif result is MountResult.MOUNTED:
@@ -77,7 +77,7 @@ def log_mount_attempt(mountpoint, result):
     elif result is MountResult.TIMEOUT:
         log.critical('Mounting {} failed because of a timeout'.format(mountpoint))
 
-def log_unmount_attempt(mountpoint, result):
+def _log_unmount_attempt(mountpoint, result):
     if result is UnmountResult.NOT_MOUNTED:
         log.warning('Path {} is not mounted, cannot unmount'.format(mountpoint))
     elif result is UnmountResult.UNMOUNTED:
@@ -87,10 +87,10 @@ def log_unmount_attempt(mountpoint, result):
     elif result is UnmountResult.TIMEOUT:
         log.critical('Unmounting {} failed because of a timeout'.format(mountpoint))
 
-def get_info_and_verify(mountpoint, **values):
+def _get_info_and_verify(mountpoint, **values):
     p = mountpoint / 'images'
     mount_result = try_mount_partition(mountpoint)
-    log_mount_attempt(mountpoint, mount_result)
+    _log_mount_attempt(mountpoint, mount_result)
     version_info = None
     fileset = None
 
@@ -133,10 +133,10 @@ def get_info_and_verify(mountpoint, **values):
             log.error('No version information for recovery data')
 
         fileset = []
-        fileset.append(generate_file_info(temp, checksums))
+        fileset.append(_generate_file_info(temp, checksums))
 
         for temp in sorted(p.glob('*.bin')):
-            fileset.append(generate_file_info(temp, checksums))
+            fileset.append(_generate_file_info(temp, checksums))
 
         overall_valid_state = 'valid' if all([f['is_valid'] for f in fileset]) else 'broken'
     else:
@@ -147,20 +147,20 @@ def get_info_and_verify(mountpoint, **values):
                'state': overall_valid_state
            }
 
-def verify_wrapper(**values):
+def _verify_wrapper(**values):
     log.info('Start verification of recovery data')
     mountpoint = Path('/mnt')
 
     try:
-        version_info, status = get_info_and_verify(mountpoint, **values)
+        version_info, status = _get_info_and_verify(mountpoint, **values)
     except:
         unmount_result = try_unmount_partition(mountpoint)
-        log_unmount_attempt(mountpoint, unmount_result)
+        _log_unmount_attempt(mountpoint, unmount_result)
         log.error('Verification of recovery data failed')
         raise
 
     unmount_result = try_unmount_partition(mountpoint)
-    log_unmount_attempt(mountpoint, unmount_result)
+    _log_unmount_attempt(mountpoint, unmount_result)
     log.info('Verification of recovery data done: {}'.format(status['state']))
 
     return version_info, status
@@ -172,15 +172,39 @@ from .endpoint import Endpoint, url_for
 from .utils import jsonify
 
 class Status(Endpoint):
-    """API Endpoint: Read out status of the recovery system data."""
+    """**API Endpoint** - Read out status of the recovery system data.
+
+    +-------------+---------------------------------------------------------+
+    | HTTP method | Description                                             |
+    +=============+=========================================================+
+    | ``GET``     | Retrieve the status of the recovery system data as of   |
+    |             | last verification. See :class:`Status.Schema`; see also |
+    |             | :class:`Verify` for information on verification.        |
+    +-------------+---------------------------------------------------------+
+    """
     class Schema(halogen.Schema):
+        """Representation of :class:`Status`."""
+        #: Link to self.
         self = halogen.Link(attr = 'href')
+
+        #: Version information about recovery data stored on Streaming Board
+        #: flash memory.
         version_info = halogen.Attr()
+
+        #: Result of last check/current status. Will be ``null`` until
+        #: verification of stored data has been triggered.
         status = halogen.Attr()
+
+        #: Number of seconds since last verification, i.e., the age of this
+        #: verification status.
         age = halogen.Attr(attr = lambda value: value.get_age())
 
+    #: Path to endpoint.
     href = '/recovery/status'
+
+    #: Supported HTTP methods.
     methods = ('GET',)
+
     lock = RLock()
 
     version_info = None
@@ -194,31 +218,73 @@ class Status(Endpoint):
         with self.lock:
             return jsonify(request, __class__.Schema.serialize(self))
 
-    def set(self, version_info, status):
+    def _set(self, version_info, status):
+        """Set status data. Called from :class:`Verify`."""
         with self.lock:
             self.version_info = version_info
             self.status = status
             self.timestamp = time()
 
     def get_age(self):
+        """Determine the age of recovery system data status in seconds."""
         return time() - self.timestamp if self.timestamp else None
 
 class Verify(Endpoint):
-    """API Endpoint: Verify the recovery system data.
+    """**API Endpoint** - Verify the recovery system data.
 
-    Method ``GET``: Read out state of the verification process.
+    +-------------+--------------------------------------------------+
+    | HTTP method | Description                                      |
+    +=============+==================================================+
+    | ``GET``     | Retrieve status of verification process, if any. |
+    |             | See :class:`Verify.Schema`.                      |
+    +-------------+--------------------------------------------------+
+    | ``POST``    | Start verification process.                      |
+    +-------------+--------------------------------------------------+
 
-    Method ``POST``: Start verification process. Data is returned after the
-    verification has been performed, which will usually take a few seconds.
-    Simultaneous ``POST`` requests are blocked, and there is a rate limit of
-    one verification request per three seconds.
+    Details on method ``POST``:
+        Any data sent with the request is ignored. For the time being, clients
+        should not send any data with the request.
+
+        If no verification is in progress when a ``POST`` request is sent, then
+        the request will start verification. The response is sent after
+        verification has finished, which may time quite some time (several
+        seconds). When done, the response contains the verification status
+        object which can also be retrieved with ``GET`` (see also
+        :class:`Verify.Schema`). This saves clients to set off another ``GET``
+        request after verification and provides safe synchronization with end
+        of verification.
+
+        If there is a verification is in progress, then the response will be an
+        immediate redirect to this endpoint with an HTTP status code 303.
+
+        There is a rate limit of one verification request per three seconds.
+        That is, in case no verification is in progress, but the last
+        verification has finished no longer than three seconds ago, the
+        response will follow immediately with HTTP status code 429.
+
+        Either way, clients should always wait for a response before sending
+        another ``POST`` request. Impatiently aborting "long" requests and
+        trying to restart them will not be of any help with progress, plus
+        things will become much more complicated on client side as its
+        application state will be disrupted. You have been warned.
+
+    A detailed status summery of the last verification can be retrieved from
+    endpoint :class:`Status`.
     """
     class Schema(halogen.Schema):
+        """Representation of :class:`Verify`."""
+        #: Link to self.
         self = halogen.Link(attr = 'href')
-        state = halogen.Attr(attr = lambda value: value.get_state_string())
 
+        #: State, either ``idle``, ``verifying``, or ``failed``.
+        state = halogen.Attr(attr = lambda value: value._get_state_string())
+
+    #: Path to endpoint.
     href =  '/recovery/verify'
+
+    #: Supported HTTP methods.
     methods = ('GET', 'POST')
+
     lock = RLock()
 
     def __init__(self, status):
@@ -234,7 +300,7 @@ class Verify(Endpoint):
             elif self.processing:
                 result = Response(status = 303)
                 result.location = url_for(request, self)
-            elif self.rate_limit():
+            elif self._rate_limit():
                 result = Response(status = 429)
             else:
                 result = None
@@ -248,19 +314,19 @@ class Verify(Endpoint):
         # this section is protected by self.processing
         try:
             failed = False
-            inf, st = verify_wrapper(**values)
+            inf, st = _verify_wrapper(**values)
         except Exception as e:
             failed = True
             inf = None
             st = None
 
         with self.lock:
-            self.status.set(inf, st)
+            self.status._set(inf, st)
             self.processing = False
             self.failed = failed
             return jsonify(request, __class__.Schema.serialize(self))
 
-    def rate_limit(self):
+    def _rate_limit(self):
         if self.status:
             age = self.status.get_age();
 
@@ -269,7 +335,7 @@ class Verify(Endpoint):
 
         return False
 
-    def get_state_string(self):
+    def _get_state_string(self):
         if self.processing:
             return 'verifying'
         elif self.failed:
@@ -277,7 +343,7 @@ class Verify(Endpoint):
         else:
             return 'idle'
 
-def get_data_file_from_form(request):
+def _get_data_file_from_form(request):
     f = request.files.get('datafile', None)
 
     if f and f.content_type != 'application/octet-stream':
@@ -285,7 +351,7 @@ def get_data_file_from_form(request):
 
     return f
 
-def create_workdir():
+def _create_workdir():
     workdir = Path('/var/local/data/recovery_data_update')
 
     try:
@@ -300,7 +366,7 @@ def create_workdir():
 
     return workdir
 
-def replace_recovery_system_data(request, status):
+def _replace_recovery_system_data(request, status):
     log.info('Start replacing recovery data')
     url_from_form = request.values.get('dataurl', None)
 
@@ -311,9 +377,9 @@ def replace_recovery_system_data(request, status):
     else:
         log.info('Taking recovery data from HTTP stream')
         status.set_retrieving()
-        file_from_form = get_data_file_from_form(request)
+        file_from_form = _get_data_file_from_form(request)
 
-    workdir = create_workdir()
+    workdir = _create_workdir()
     gpgfile = workdir / 'recoverydata.gpg'
     payload = workdir / 'recoverydata'
     is_mounted = False
@@ -354,7 +420,7 @@ def replace_recovery_system_data(request, status):
         status.set_step_name('extracting')
         mountpoint = Path('/mnt')
         mount_result = try_mount_partition(mountpoint, True)
-        log_mount_attempt(mountpoint, mount_result)
+        _log_mount_attempt(mountpoint, mount_result)
 
         succeeded = False
 
@@ -393,7 +459,7 @@ def replace_recovery_system_data(request, status):
 
         status.set_step_name('finalizing')
         unmount_result = try_unmount_partition(mountpoint)
-        log_unmount_attempt(mountpoint, unmount_result)
+        _log_unmount_attempt(mountpoint, unmount_result)
         is_mounted = False
 
         remove_directory(workdir)
@@ -409,35 +475,104 @@ def replace_recovery_system_data(request, status):
 
         if is_mounted:
             unmount_result = try_unmount_partition(mountpoint)
-            log_unmount_attempt(mountpoint, unmount_result)
+            _log_unmount_attempt(mountpoint, unmount_result)
 
         remove_directory(workdir)
 
         raise
 
 class Replace(Endpoint):
-    """API Endpoint: Replace the recovery system data.
+    """**API Endpoint** - Replace the recovery system data.
 
-    Method ``GET``: Read out state of the replacement process.
+    +-------------+------------------------------------------------------+
+    | HTTP method | Description                                          |
+    +=============+======================================================+
+    | ``GET``     | Retrieve status of data replacement process, if any. |
+    |             | See :class:`Replace.Schema`.                         |
+    +-------------+------------------------------------------------------+
+    | ``POST``    | Send recovery data as a substitute for the data      |
+    |             | currently stored on flash memory.                    |
+    +-------------+------------------------------------------------------+
 
-    Method ``POST``: Start the replacement process. The recovery data archive
-    is passed as form, either as download URL (``dataurl``) or as direct data
-    stream (``datafile``). If both are passed, then ``dataurl`` is preferred
-    and ``datafile`` gets ignored. The result is returned after the replacement
-    has been performed. Simultaneous ``POST`` requests are blocked.
+    Details on method ``GET``:
+        The recovery data replacement process does not emit any events to the
+        event monitor. Thus, polling this endpoint is an acceptable way for
+        monitoring the state of the replacement process. The poll interval
+        should not exceed 2 seconds.
+
+    Details on method ``POST``:
+        There are two ways for uploading recovery data to the system: either by
+        sending a download URL, or by sending the data directly as form data.
+        If a download URL is sent, then this URL must point to a location from
+        which the Streaming Board can pull a *recovery data archive*. If sent
+        as form data, then the data pushed to the Streaming Board must be the
+        *recovery data archive* itself.
+
+        A download URL is passed in as parameter ``dataurl``. It shall contain
+        a valid URL of a recovery data archive. A request of this kind is small
+        and sent quickly. In this case, the Streaming Board is responsible for
+        retrieving the archive.
+
+        Alternatively, direct recovery data archive upload can be done through
+        parameter ``datafile``. A request of this kind will take a long time to
+        be sent off completely because the archive files are pretty big. While
+        the request is in progress of being sent, no meaningful update of the
+        recovery data replacement process is going to take place.
+
+        If both, ``dataurl`` and ``datafile``, are present, then the former is
+        preferred and the latter gets ignored. The content type must be
+        ``multipart/form-data`` in any case.
+
+        If there is a data replacement is in progress, then the response will
+        be an immediate redirect to this endpoint with an HTTP status code 303.
+
+        When done, the response contains the data replacement process status
+        object which can also be retrieved with ``GET`` (see also
+        :class:`Replace.Schema`). This saves clients to set off another ``GET``
+        request after recovery data replacement and provides safe
+        synchronization with end of replacement.
+
+        It is a *very* good idea to verify the recovery data after the data
+        have been replaced (see :class:`Verify`). Even though there is only a
+        very small chance of verification failures after successful replacement
+        of recovery data, but in this particular case it is much better to be
+        safe than sorry.
+
+        Clients should always wait for a response before sending another
+        ``POST`` request. Impatiently aborting "long" requests and trying to
+        restart them will not be of any help with progress, plus things will
+        become much more complicated on client side as its application state
+        will be disrupted. You have been warned.
     """
     class Schema(halogen.Schema):
+        """Representation of :class:`Replace`."""
+        #: Link to self.
         self = halogen.Link(attr = 'href')
-        state = halogen.Attr(attr = lambda value: value.get_state_string())
-        origin = halogen.Attr(attr = lambda value: value.get_data_origin() if value.processing else value.does_not_exist(), required = False)
 
+        #: Short string describing the currently running step in the
+        #: replacement process. Possible values are  ``idle``,
+        #: ``receiving request``, ``retrieving``, ``downloading``,
+        #: ``verifying signature``, ``verifying archive``, ``extracting``, and
+        #: ``finalizing``. These strings are suitable for display of progress
+        #: in a user interface.
+        state = halogen.Attr(attr = lambda value: value._get_state_string())
+
+        #: Where the recovery data is coming from, either a URL or ``null``
+        #: (i.e., recovery data was sent as request form data). The field will
+        #: be missing in case no replacement process in active.
+        origin = halogen.Attr(attr = lambda value: value._get_data_origin() if value.processing else value.does_not_exist(), required = False)
+
+    #: Path to endpoint.
     href = '/recovery/replace'
+
+    #: Supported HTTP methods.
     methods = ('GET', 'POST')
+
     lock = RLock()
 
     def __init__(self):
         Endpoint.__init__(self, 'recovery_system_replace', 'Replace recovery system data')
-        self.reset()
+        self._reset()
 
     def __call__(self, request, **values):
         with self.lock:
@@ -458,37 +593,42 @@ class Replace(Endpoint):
 
         # this section is protected by self.processing
         try:
-            result = replace_recovery_system_data(request, self)
-            self.reset()
+            result = _replace_recovery_system_data(request, self)
+            self._reset()
             return result
         except:
-            self.reset()
+            self._reset()
             raise
 
-    def reset(self):
+    def _reset(self):
         with self.lock:
             self.processing = False
             self.step = None
             self.url = None
 
     def set_retrieving(self, url = None):
+        """Set progress step: retrieving form data or downloading."""
         with self.lock:
-            self.step = 'downloading' if url else 'retrieving'
-            self.url = url if url else '<form data>'
+            if self.processing:
+                self.step = 'downloading' if url else 'retrieving'
+                self.url = url if url else '<form data>'
 
     def set_step_name(self, name):
+        """Set progress step: any short string describing the step."""
         with self.lock:
-            self.step = name
+            if self.processing:
+                self.step = name
 
-    def get_state_string(self):
+    def _get_state_string(self):
         return self.step if self.processing else 'idle'
 
-    def get_data_origin(self):
+    def _get_data_origin(self):
         return self.url if self.processing else None
 
 status_endpoint = Status()
 all_endpoints = [status_endpoint, Verify(status_endpoint), Replace()]
 
 def add_endpoints():
+    """Register all endpoints defined in this module."""
     from .endpoint import register_endpoints
     register_endpoints(all_endpoints)

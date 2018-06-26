@@ -24,18 +24,18 @@ log = get_logger('Monitor')
 import threading
 import selectors
 
-class ClientLister:
+class ClientListener:
     def __init__(self, port, add_cb, remove_cb):
         self.is_ready = threading.Event()
         self.is_running = True
         self.thread = threading.Thread(name = 'Monitor client listener',
-                                       target = self.worker,
+                                       target = self._worker,
                                        args = (port, add_cb, remove_cb))
         self.thread.start()
         self.is_ready.wait()
 
     @staticmethod
-    def create_listening_socket(family, port):
+    def _create_listening_socket(family, port):
         from socket import socket, SOL_SOCKET, SO_REUSEADDR
         s = socket(family = family)
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
@@ -45,15 +45,15 @@ class ClientLister:
         return s
 
     @staticmethod
-    def accept_connection(sock, mask, sel, **kwargs):
+    def _accept_connection(sock, mask, sel, **kwargs):
         conn, addr = sock.accept()
         log.info('New client {0[0]}:{0[1]}'.format(addr))
         conn.setblocking(False)
-        sel.register(conn, selectors.EVENT_READ, ClientLister.read)
+        sel.register(conn, selectors.EVENT_READ, ClientListener._read)
         kwargs['add_cb'](conn)
 
     @staticmethod
-    def read(conn, mask, sel, **kwargs):
+    def _read(conn, mask, sel, **kwargs):
         try:
             log.info('Lost client {0[0]}:{0[1]}'.format(conn.getpeername()))
         except:
@@ -64,7 +64,7 @@ class ClientLister:
         kwargs['remove_cb'](conn)
 
     def kick_client(self, conn):
-        ClientLister.read(conn, None, self.sel, remove_cb = self.remove_client_cb)
+        ClientListener._read(conn, None, self.sel, remove_cb = self.remove_client_cb)
 
     def stop(self):
         from os import close
@@ -76,17 +76,17 @@ class ClientLister:
     def _terminate(self, *args, **kwargs):
         self.is_running = False
 
-    def worker(self, port, add_cb, remove_cb):
+    def _worker(self, port, add_cb, remove_cb):
         from socket import AF_INET, AF_INET6
         self.sel = selectors.DefaultSelector()
         self.remove_client_cb = remove_cb
 
         try:
-            self.server_sock = ClientLister.create_listening_socket(AF_INET6, port)
+            self.server_sock = ClientListener._create_listening_socket(AF_INET6, port)
         except:
-            self.server_sock = ClientLister.create_listening_socket(AF_INET, port)
+            self.server_sock = ClientListener._create_listening_socket(AF_INET, port)
 
-        self.sel.register(self.server_sock, selectors.EVENT_READ, ClientLister.accept_connection)
+        self.sel.register(self.server_sock, selectors.EVENT_READ, ClientListener._accept_connection)
 
         from os import pipe
         self.stop_fd_read, self.stop_fd_write = pipe()
@@ -109,7 +109,7 @@ class Event:
         self.endpoint = endpoint
         self.kwargs = kwargs
 
-def send_message_to_client(bytes, conn):
+def _send_message_to_client(bytes, conn):
     offset = 0
 
     while offset < len(bytes):
@@ -132,7 +132,7 @@ class EventDispatcher:
         self.events = Queue(50)
         self.is_ready = threading.Event()
         self.thread = threading.Thread(name = 'Monitor event dispatcher',
-                                       target = self.worker,
+                                       target = self._worker,
                                        args = (clients_manager,))
         self.thread.start()
         self.is_ready.wait()
@@ -148,7 +148,7 @@ class EventDispatcher:
         else:
             log.warning('Not putting empty event into queue')
 
-    def worker(self, clients_manager):
+    def _worker(self, clients_manager):
         log.info('Event dispatcher thread running')
         self.is_ready.set()
 
@@ -185,68 +185,124 @@ class EventDispatcher:
                     log.debug('Send to {}'.format(c))
 
                     try:
-                        send_message_to_client(message_as_bytes, c)
+                        _send_message_to_client(message_as_bytes, c)
                     except Exception as e:
                         log.error('Error while sending data to client {}: {}'.format(c, e))
                         bad_connections.append(c)
 
             if bad_connections:
-                clients_manager.handle_bad_connections(bad_connections)
+                clients_manager._handle_bad_connections(bad_connections)
 
         log.info('Event dispatcher thread terminates')
 
 class Monitor:
+    """Event handling and distribution to listening clients."""
     def __init__(self):
-        self.lock = threading.RLock()
-        self.reset()
+        #: Lock for this object. The :attr:`event_dispatcher` synchronizes on
+        #: this lock when it makes use of this object via context manager.
+        self._lock = threading.RLock()
 
-    def reset(self):
+        self._reset()
+
+    def _reset(self):
+        """Reset this monitor to factory defaults.
+
+        Caller must have acquired :attr:`_lock`.
+        """
+        #: A dictionary for keeping track of client connections. Its keys are
+        #: socket objects. This object is a "hot" object in the sense that it
+        #: is concurrently accessed by the two worker threads as well as from
+        #: any context adding new events via :meth:`send`.
         self.clients = None
+
+        #: An instance of a :class:`ClientListener`, created when the
+        #: :class:`Monitor` instance is started.
         self.client_listener = None
+
+        #: An instance of a :class:`EventDispatcher`, created when the
+        #: :class:`Monitor` instance is started.
         self.event_dispatcher = None
 
     def start(self, port):
-        with self.lock:
+        """Start the client listener and event dispatching threads.
+
+        The client listener will listen on TCP port ``port`` and accept any
+        connections. There is currently no authentication required nor any
+        other kind of access control.
+
+        It is safe to call this method multiple times. It is guaranteed that
+        only a single set of threads is started.
+        """
+        with self._lock:
             if self._is_started():
                 return
 
             self.clients = {}
-            self.client_listener = ClientLister(port, self.add_client, self.remove_client)
+            self.client_listener = ClientListener(port, self._add_client, self._remove_client)
             self.event_dispatcher = EventDispatcher(self)
 
     def stop(self):
-        with self.lock:
+        """Shut down the client listener and event dispatching threads.
+
+        It is safe to call this method multiple times, but a warning will be
+        emitted to the log when trying to stop a stopped :class:`Monitor`
+        instance.
+        """
+        with self._lock:
             if not self._is_started():
                 log.warning('Cannot stop monitor, already stopped')
                 return
 
             self.client_listener.stop()
             self.event_dispatcher.stop()
-            self.reset()
+            self._reset()
 
     def _is_started(self):
+        """Check if this monitor has been started.
+
+        Caller must have acquired :attr:`_lock`.
+        """
         return self.clients is not None
 
     def __enter__(self):
-        self.lock.acquire()
+        self._lock.acquire()
         return self.clients
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self.lock.release()
+        self._lock.release()
         return False
 
-    def add_client(self, conn):
-        with self.lock:
+    def _add_client(self, conn):
+        """Callback for :class:`ClientListener`, called for each new client.
+
+        This function runs in the context of the worker thread started by the
+        :class:`ClientListener` instance referenced by the
+        :attr:`client_listener` attribute.
+        """
+        with self._lock:
             self.clients[conn] = None
 
-    def remove_client(self, conn):
-        with self.lock:
+    def _remove_client(self, conn):
+        """Callback for :class:`ClientListener`, called for each remove client.
+
+        This function runs in the context of the worker thread started by the
+        :class:`ClientListener` instance referenced by the
+        :attr:`client_listener` attribute.
+        """
+        with self._lock:
             del self.clients[conn]
 
-    def handle_bad_connections(self, conns):
+    def _handle_bad_connections(self, conns):
+        """Function called by the worker thread in :class:`EventDispatcher`
+        when it has determined that some client connections turned out bad.
+
+        This function runs in the context of the worker thread started by the
+        :class:`EventDispatcher` instance referenced by the
+        :attr:`event_dispatcher` attribute.
+        """
         log.debug('Have {} bad connections'.format(len(conns)))
 
-        with self.lock:
+        with self._lock:
             for c in conns:
                 try:
                     log.info('Kicking bad client {0[0]}:{0[1]}'.format(c.getpeername()))
@@ -256,12 +312,29 @@ class Monitor:
                 self.client_listener.kick_client(c)
 
     def send(self, endpoint, **kwargs):
+        """Send event to all connected clients.
+
+        All connected clients are informed about changes on ``endpoint``, an
+        object of type :class:`strbo.endpoint.Endpoint`. This event is stored
+        in an internal queue which is processed by a thread dedicated to
+        sending events to clients.
+
+        This method usually returns fast unless the event queue is congested.
+        In case of congestion, this method will block until there is an empty
+        slot in the queue.
+
+        The method will also block if the :class:`Monitor` object is locked.
+        Typically, this will only happen if some thread locks the monitor for a
+        long time by means of the context manager; thus, if this happens at
+        all, then it will typically be inside the event dispatcher's worker
+        thread.
+        """
         if not isinstance(endpoint, Endpoint):
             raise TypeError('Only objects of type Endpoint can be sent to monitor')
 
         if not hasattr(endpoint, 'get_json'):
             raise TypeError('Endpoint {} has no get_json() method'.format(str(endpoint)))
 
-        with self.lock:
+        with self._lock:
             if self._is_started():
                 self.event_dispatcher.put(Event(endpoint, **kwargs))

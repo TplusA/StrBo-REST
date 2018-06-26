@@ -19,8 +19,12 @@
 
 from flipflop import WSGIServer
 from werkzeug.contrib.fixers import CGIRootFix
-from strbo import app
 
 if __name__ == '__main__':
+    from strbo import init
+    init()
+
+    from strbo import app
     app.wsgi_app = CGIRootFix(app.wsgi_app, app_root = 'v1')
+
     WSGIServer(app).run()
