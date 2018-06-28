@@ -29,8 +29,10 @@ from . import listerrors
 import strbo.dbus
 log = get_logger()
 
+
 class Credentials(Endpoint):
-    """**API Endpoint** - Management of credentials for external music services.
+    """**API Endpoint** - Management of credentials for external music
+    services.
 
     +-------------+---------------------------------------------------------+
     | HTTP method | Description                                             |
@@ -63,8 +65,10 @@ class Credentials(Endpoint):
         will communicate status through the monitor while it is using these
         data.
     """
+
     class _Data:
         """Helper structure for serialization."""
+
         def __init__(self, id):
             iface = strbo.dbus.Interfaces.credentials_read()
             self.username, self.password = iface.GetDefaultCredentials(id)
@@ -76,8 +80,10 @@ class Credentials(Endpoint):
 
     class Schema(halogen.Schema):
         """Representation of :class:`Credentials`."""
+
         #: Link to self.
-        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id + '/credentials')
+        self = halogen.Link(attr=lambda value: '/airable/service/' +
+                                               value.id + '/credentials')
 
         #: Music service ID.
         id = halogen.Attr()
@@ -90,8 +96,10 @@ class Credentials(Endpoint):
 
     class SchemaShort(halogen.Schema):
         """Partial representation of :class:`Credentials`."""
+
         #: Link to self.
-        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id + '/credentials')
+        self = halogen.Link(attr=lambda value: '/airable/service/' +
+                                               value.id + '/credentials')
 
     #: Path to endpoint.
     href = '/airable/service/{id}/credentials'
@@ -103,11 +111,15 @@ class Credentials(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_service_credentials', 'Management of credentials for external music services')
+        Endpoint.__init__(
+            self, 'airable_service_credentials',
+            'Management of credentials for external music services'
+        )
 
     def __call__(self, request, id, **values):
         if request.method == 'GET':
-            return jsonify(request, Credentials.Schema.serialize(Credentials._Data(id)))
+            return jsonify(request,
+                           Credentials.Schema.serialize(Credentials._Data(id)))
 
         with self.lock:
             userpass = request.json
@@ -124,7 +136,7 @@ class Credentials(Endpoint):
                     if not username:
                         raise ValueError("Empty user name")
             except Exception as e:
-                return Response('Exception: ' + str(e), status = 400)
+                return Response('Exception: ' + str(e), status=400)
 
             # update credentials database
             try:
@@ -141,23 +153,27 @@ class Credentials(Endpoint):
                     wcred_iface.DeleteCredentials(id, "")
                     login_iface.ExternalServiceLogout(id, "", True, LOGIN_LOGOUT_ACTOR_ID)
             except Exception as e:
-                return Response('Exception: ' + str(e), status = 500)
+                return Response('Exception: ' + str(e), status=500)
 
-        return Response(status = 204)
+        return Response(status=204)
+
 
 class Service:
     """Information about a service accessible through Airable."""
+
     class Schema(halogen.Schema):
         """Representation of :class:`Service`."""
+
         #: Link to self.
-        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id)
+        self = halogen.Link(attr=lambda value: '/airable/service/' + value.id)
 
         #: Music service ID.
         id = halogen.Attr()
 
         #: Embedded :class:`Credentials.SchemaShort` object. It's the partial
         #: representation so that we don't spam around sensitive data.
-        credentials = halogen.Embedded(Credentials.SchemaShort, attr = lambda value: value)
+        credentials = halogen.Embedded(Credentials.SchemaShort,
+                                       attr=lambda value: value)
 
         #: Human-readable description of music service.
         description = halogen.Attr()
@@ -169,8 +185,9 @@ class Service:
 
     class SchemaShort(halogen.Schema):
         """Partial representation of :class:`Service`."""
+
         #: Link to self.
-        self = halogen.Link(attr = lambda value: '/airable/service/' + value.id)
+        self = halogen.Link(attr=lambda value: '/airable/service/' + value.id)
 
         #: Music service ID.
         id = halogen.Attr()
@@ -181,8 +198,10 @@ class Service:
         self.login_status = None
 
     def update_login_status(self, data):
-        """Set login status. Called from :meth:`Services.update_login_status`."""
+        """Set login status data. Called from
+        :meth:`Services.update_login_status`."""
         self.login_status = data
+
 
 class ServiceInfo(Endpoint):
     """**API Endpoint** - Accessing an external service provided by Airable.
@@ -197,6 +216,7 @@ class ServiceInfo(Endpoint):
     To avoid issues with (lack of) locking, this class should not accessed
     directly, but through the :class:`Services` class.
     """
+
     #: Path to endpoint.
     href = '/airable/service/{id}'
     href_for_map = '/airable/service/<id>'
@@ -207,7 +227,11 @@ class ServiceInfo(Endpoint):
     lock = RLock()
 
     def __init__(self, services):
-        Endpoint.__init__(self, 'airable_service', 'Accessing a specific Airable external streaming service')
+        Endpoint.__init__(
+            self, 'airable_service',
+            'Accessing a specific Airable external streaming service'
+        )
+
         self.services = services
 
     def __call__(self, request, id, **values):
@@ -229,6 +253,7 @@ class ServiceInfo(Endpoint):
                 raise EmptyError(self)
 
             return jsonify_simple({self.id: Service.Schema.serialize(service)})
+
 
 class Services(Endpoint):
     """**API Endpoint** - Information about all external music services
@@ -254,23 +279,34 @@ class Services(Endpoint):
         including non-cached requests; therefore, use non-cached requests
         sparingly, especially if the network seems to be slow.
     """
+
     class Schema(halogen.Schema):
         """Representation of :class:`Services`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Embedded list of :class:`Service` objects
         #: (see :class:`Service.Schema`). Field may be missing.
-        services = halogen.Embedded(halogen.types.List(Service.Schema), attr = lambda value: [value.services[id] for id in value.services], required = False)
+        services = halogen.Embedded(
+            halogen.types.List(Service.Schema),
+            attr=lambda value: [value.services[id] for id in value.services],
+            required=False
+        )
 
     class SchemaShort(halogen.Schema):
         """Partial representation of :class:`Services`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Embedded list of partial :class:`Service` objects
         #: (see :class:`Service.SchemaShort`). Field may be missing.
-        services = halogen.Embedded(halogen.types.List(Service.SchemaShort), attr = lambda value: [value.services[id] for id in value.services], required = False)
+        services = halogen.Embedded(
+            halogen.types.List(Service.SchemaShort),
+            attr=lambda value: [value.services[id] for id in value.services],
+            required=False
+        )
 
     #: Path to endpoint.
     href = '/airable/services'
@@ -283,10 +319,14 @@ class Services(Endpoint):
     services = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_services', 'List of external streaming services available through Airable')
+        Endpoint.__init__(
+            self, 'airable_services',
+            'List of external streaming services available through Airable'
+        )
+
         self.service_infos = ServiceInfo(self)
 
-    def __call__(self, request = None, **values):
+    def __call__(self, request=None, **values):
         cc = None if request is None else request.environ.get('HTTP_CACHE_CONTROL', None)
 
         with self.lock:
@@ -296,7 +336,7 @@ class Services(Endpoint):
             if self.services is None:
                 self._refresh()
 
-            return self if request is None else jsonify(request, __class__.Schema.serialize(self))
+            return self if request is None else jsonify(request, Services.Schema.serialize(self))
 
     def __enter__(self):
         self.lock.acquire()
@@ -308,7 +348,7 @@ class Services(Endpoint):
 
     def _clear(self):
         """Remove all services. Called internally and from :class:`Info`."""
-        services = None
+        self.services = None
 
     def _refresh(self):
         """Reload all services. Called internally and from :class:`Info`."""
@@ -316,7 +356,8 @@ class Services(Endpoint):
 
         try:
             iface = strbo.dbus.Interfaces.credentials_read()
-            self.services = {c[0]: Service(c[0], c[1]) for c in iface.GetKnownCategories()}
+            self.services = {c[0]: Service(c[0], c[1])
+                             for c in iface.GetKnownCategories()}
         except:
             log.error('Failed retrieving list of external services')
             self._clear()
@@ -335,7 +376,7 @@ class Services(Endpoint):
         with self.lock:
             return self.service_infos.get_json(**kwargs)
 
-    def update_login_status(self, id, data, send_to_monitor = True):
+    def update_login_status(self, id, data, send_to_monitor=True):
         """Set login status. Called from D-Bus signal handler."""
         with self.lock:
             s = self.get_service_by_id(id)
@@ -346,7 +387,8 @@ class Services(Endpoint):
             s.update_login_status(data)
 
         if send_to_monitor:
-            monitor.send(self, service_id = id)
+            monitor.send(self, service_id=id)
+
 
 class Auth(Endpoint):
     """**API Endpoint** - Authentication with Airable using the appliance key.
@@ -370,6 +412,7 @@ class Auth(Endpoint):
         therefore not cacheable. A corresponding HTTP header is sent along with
         the response.
     """
+
     #: Path to endpoint.
     href = '/airable/authentication{?locale}'
     href_for_map = '/airable/authentication'
@@ -378,7 +421,8 @@ class Auth(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_authentication', 'Airable authentication URL')
+        Endpoint.__init__(self, 'airable_authentication',
+                          'Airable authentication URL')
 
     def __call__(self, request, **values):
         try:
@@ -392,23 +436,26 @@ class Auth(Endpoint):
             log.error('Failed generating Airable authentication URL')
             raise
 
+
 class Password(Endpoint):
     """**API Endpoint** - Generate temporary password for Airable protocol.
 
-    +-------------+------------------------------------------------------------+
-    | HTTP method | Description                                                |
-    +=============+============================================================+
-    | ``GET``     | Retrieve a password based on login token and current time. |
-    +-------------+------------------------------------------------------------+
+    +-------------+-----------------------------------------------------------+
+    | HTTP method | Description                                               |
+    +=============+===========================================================+
+    | ``GET``     | Retrieve a password based on login token and current time |
+    |             | stamp.                                                    |
+    +-------------+-----------------------------------------------------------+
 
     Details on method ``GET``:
         The login token obtained from Airable must be passed as URL parameter
-        `{token}`, and the current timestamp must be passed as parameter
+        `{token}`, and the current time stamp must be passed as parameter
         `{time}`.
 
         This method does not access the network. It is a pure computation step.
         It will always generate the same answer given the same input.
     """
+
     #: Path to endpoint.
     href = '/airable/password{?token,time}'
     href_for_map = '/airable/password'
@@ -417,7 +464,8 @@ class Password(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_password', 'Airable password generator')
+        Endpoint.__init__(self, 'airable_password',
+                          'Airable password generator')
 
     def __call__(self, request, **values):
         try:
@@ -429,14 +477,16 @@ class Password(Endpoint):
 
             iface = strbo.dbus.Interfaces.airable()
             password = iface.GeneratePassword(token, timestamp)
-            return jsonify(request, {'password': password, 'token': token, 'time': timestamp})
+            return jsonify(request, {'password': password, 'token': token,
+                                     'time': timestamp})
         except:
             log.error('Failed generating Airable authentication URL')
             raise
 
+
 class Redirect(Endpoint):
-    """**API Endpoint** - Follow Airable redirect found at given path, redirect to
-    URL the path redirects to.
+    """**API Endpoint** - Follow Airable redirect found at given path, redirect
+    to URL the path redirects to.
 
     +-------------+-------------------------------------------------+
     | HTTP method | Description                                     |
@@ -460,6 +510,7 @@ class Redirect(Endpoint):
         code, and an error name. These information are primarily useful for
         debugging, not for presentation to the user.
     """
+
     #: Path to endpoint.
     href = '/airable/redirect/{+path}'
     href_for_map = '/airable/redirect/<path:path>'
@@ -483,9 +534,9 @@ class Redirect(Endpoint):
 
             if listerrors.is_error(error_code):
                 result = jsonify(request,
-                                 path = path, url = airable_url,
-                                 error_code = error_code,
-                                 error = listerrors.to_string(error_code))
+                                 path=path, url=airable_url,
+                                 error_code=error_code,
+                                 error=listerrors.to_string(error_code))
 
                 ec = listerrors.to_code(error_code)
 
@@ -509,13 +560,14 @@ class Redirect(Endpoint):
                 else:
                     result.status_code = 404
             else:
-                result = Response(status = 307)
+                result = Response(status=307)
                 result.location = url
 
             return result
         except:
             log.error('Failed following Airable redirect')
             raise
+
 
 class Info(Endpoint):
     """**API Endpoint** - Entry point for interfacing with Airable.
@@ -528,10 +580,12 @@ class Info(Endpoint):
     |             | See :class:`Info.Schema`.                            |
     +-------------+------------------------------------------------------+
     """
+
     class Schema(halogen.Schema):
         """Representation of :class:`Info`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Airable API entry point.
         root_url = halogen.Attr()
@@ -565,7 +619,7 @@ class Info(Endpoint):
             if not self.are_data_available:
                 self._refresh()
 
-            return jsonify(request, __class__.Schema.serialize(self))
+            return jsonify(request, Info.Schema.serialize(self))
 
     def _clear(self):
         self.are_data_available = False
@@ -585,11 +639,15 @@ class Info(Endpoint):
             self._clear()
             raise
 
+
 info_endpoint = Info()
-all_endpoints = [info_endpoint, info_endpoint.music_services, info_endpoint.music_services.service_infos,
+all_endpoints = [info_endpoint, info_endpoint.music_services,
+                 info_endpoint.music_services.service_infos,
                  Credentials(), Auth(), Password(), Redirect()]
 
-def signal__external_service_login_status(service_id, actor_id, log_in, error_code, info):
+
+def signal__external_service_login_status(service_id, actor_id, log_in,
+                                          error_code, info):
     login_status = {
         'logged_in': error_code == 0 and log_in != 0,
         'info': info
@@ -601,11 +659,12 @@ def signal__external_service_login_status(service_id, actor_id, log_in, error_co
 
     info_endpoint.music_services.update_login_status(service_id, login_status)
 
+
 def add_endpoints():
     """Register all endpoints defined in this module, start listening to
     relevant D-Bus signals."""
-    from .endpoint import register_endpoints, register_endpoint
+    from .endpoint import register_endpoints
     register_endpoints(all_endpoints)
 
-    strbo.dbus.Interfaces.airable().connect_to_signal('ExternalServiceLoginStatus',
-                                                      signal__external_service_login_status)
+    strbo.dbus.Interfaces.airable().connect_to_signal(
+        'ExternalServiceLoginStatus', signal__external_service_login_status)

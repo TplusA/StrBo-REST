@@ -24,6 +24,7 @@ from .endpoint import Endpoint
 from .utils import get_logger
 log = get_logger()
 
+
 class EntryPoint(Endpoint):
     """**API Endpoint** - Entry point to API.
 
@@ -44,10 +45,11 @@ class EntryPoint(Endpoint):
     **WARNING:** *ABSOLUTELY NO MEASURES WILL BE TAKEN TO ENSURE STABILITY OF
     ENDPOINT URLS OTHER THAN THE URL OF THIS ENDPOINT.*
     """
+
     class Schema(halogen.Schema):
         """Representation of entry point."""
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Links to endpoints related to Airable. See :mod:`strbo.airable`.
         airable = halogen.Link(halogen.types.List(Endpoint.Schema))
@@ -62,7 +64,7 @@ class EntryPoint(Endpoint):
 
         #: TCP port of the event monitor. Field may be missing in case the
         #: monitor has not been started.
-        monitor_port = halogen.Attr(required = False)
+        monitor_port = halogen.Attr(required=False)
 
     #: Path to endpoint.
     href = '/'
@@ -81,10 +83,12 @@ class EntryPoint(Endpoint):
 
     def __call__(self, request, **values):
         from .utils import jsonify
-        return jsonify(request, __class__.Schema.serialize(self))
+        return jsonify(request, EntryPoint.Schema.serialize(self))
+
 
 from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
+
 
 class JSONRequest(Request):
     """Custom request extension to allow extraction of JSON data.
@@ -92,6 +96,7 @@ class JSONRequest(Request):
     All requests passed to the :class:`strbo.endpoint.Endpoint` handlers are of
     this type. This class is derived from :class:`werkzeug.wrappers.Request`.
     """
+
     @cached_property
     def json(self):
         """Extract JSON data from request, if any.
@@ -107,8 +112,10 @@ class JSONRequest(Request):
         else:
             return None
 
+
 class StrBo:
     """Our WSGI application."""
+
     def __init__(self):
         self.lock = Lock()
         self.is_monitor_started = False
@@ -162,7 +169,6 @@ class StrBo:
         if not self.is_monitor_started:
             self._start_monitor(environ.get('SERVER_PORT', None))
 
-        from werkzeug.wrappers import Request
         from .endpoint import dispatch
         request = JSONRequest(environ)
         response = dispatch(request)

@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU General Public License
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
-from pathlib import Path, PurePath
+from pathlib import Path
 from hashlib import sha256
 from time import time
 from threading import RLock
@@ -28,6 +28,7 @@ from .utils import try_unmount_partition, UnmountResult
 from .utils import remove_directory
 from .utils import get_logger
 log = get_logger()
+
 
 def _generate_file_info(file, checksums):
     expected = 'unavailable' if not checksums or file.name not in checksums else checksums[file.name]
@@ -67,6 +68,7 @@ def _generate_file_info(file, checksums):
 
     return fi
 
+
 def _log_mount_attempt(mountpoint, result):
     if result is MountResult.ALREADY_MOUNTED:
         log.warning('Path {} is already mounted, operation in progress'.format(mountpoint))
@@ -77,6 +79,7 @@ def _log_mount_attempt(mountpoint, result):
     elif result is MountResult.TIMEOUT:
         log.critical('Mounting {} failed because of a timeout'.format(mountpoint))
 
+
 def _log_unmount_attempt(mountpoint, result):
     if result is UnmountResult.NOT_MOUNTED:
         log.warning('Path {} is not mounted, cannot unmount'.format(mountpoint))
@@ -86,6 +89,7 @@ def _log_unmount_attempt(mountpoint, result):
         log.critical('Unmounting {} failed'.format(mountpoint))
     elif result is UnmountResult.TIMEOUT:
         log.critical('Unmounting {} failed because of a timeout'.format(mountpoint))
+
 
 def _get_info_and_verify(mountpoint, **values):
     p = mountpoint / 'images'
@@ -121,7 +125,7 @@ def _get_info_and_verify(mountpoint, **values):
 
         if version_file and len(version_file) == 3:
             version_info = {
-                'number':    version_file[0].strip(),
+                'number': version_file[0].strip(),
                 'timestamp': version_file[1].strip(),
                 'commit_id': version_file[2].strip(),
             }
@@ -138,14 +142,14 @@ def _get_info_and_verify(mountpoint, **values):
         for temp in sorted(p.glob('*.bin')):
             fileset.append(_generate_file_info(temp, checksums))
 
-        overall_valid_state = 'valid' if all([f['is_valid'] for f in fileset]) else 'broken'
+        overall_valid_state = \
+            'valid' if all([fs['is_valid'] for fs in fileset]) else 'broken'
     else:
         overall_valid_state = 'unavailable'
 
-    return version_info, {
-               'recovery_files': fileset,
-               'state': overall_valid_state
-           }
+    return version_info, {'recovery_files': fileset,
+                          'state': overall_valid_state}
+
 
 def _verify_wrapper(**values):
     log.info('Start verification of recovery data')
@@ -171,6 +175,7 @@ import halogen
 from .endpoint import Endpoint, url_for
 from .utils import jsonify
 
+
 class Status(Endpoint):
     """**API Endpoint** - Read out status of the recovery system data.
 
@@ -182,10 +187,12 @@ class Status(Endpoint):
     |             | :class:`Verify` for information on verification.        |
     +-------------+---------------------------------------------------------+
     """
+
     class Schema(halogen.Schema):
         """Representation of :class:`Status`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Version information about recovery data stored on Streaming Board
         #: flash memory.
@@ -197,7 +204,7 @@ class Status(Endpoint):
 
         #: Number of seconds since last verification, i.e., the age of this
         #: verification status.
-        age = halogen.Attr(attr = lambda value: value.get_age())
+        age = halogen.Attr(attr=lambda value: value.get_age())
 
     #: Path to endpoint.
     href = '/recovery/status'
@@ -212,11 +219,12 @@ class Status(Endpoint):
     timestamp = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_info', 'Status of the recovery system data')
+        Endpoint.__init__(self, 'recovery_system_info',
+                          'Status of the recovery system data')
 
     def __call__(self, request, **values):
         with self.lock:
-            return jsonify(request, __class__.Schema.serialize(self))
+            return jsonify(request, Status.Schema.serialize(self))
 
     def _set(self, version_info, status):
         """Set status data. Called from :class:`Verify`."""
@@ -228,6 +236,7 @@ class Status(Endpoint):
     def get_age(self):
         """Determine the age of recovery system data status in seconds."""
         return time() - self.timestamp if self.timestamp else None
+
 
 class Verify(Endpoint):
     """**API Endpoint** - Verify the recovery system data.
@@ -271,16 +280,18 @@ class Verify(Endpoint):
     A detailed status summery of the last verification can be retrieved from
     endpoint :class:`Status`.
     """
+
     class Schema(halogen.Schema):
         """Representation of :class:`Verify`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: State, either ``idle``, ``verifying``, or ``failed``.
-        state = halogen.Attr(attr = lambda value: value._get_state_string())
+        state = halogen.Attr(attr=lambda value: value._get_state_string())
 
     #: Path to endpoint.
-    href =  '/recovery/verify'
+    href = '/recovery/verify'
 
     #: Supported HTTP methods.
     methods = ('GET', 'POST')
@@ -288,7 +299,8 @@ class Verify(Endpoint):
     lock = RLock()
 
     def __init__(self, status):
-        Endpoint.__init__(self, 'recovery_system_verify', 'Verification of recovery system data')
+        Endpoint.__init__(self, 'recovery_system_verify',
+                          'Verification of recovery system data')
         self.status = status
         self.processing = False
         self.failed = False
@@ -296,12 +308,12 @@ class Verify(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify(request, __class__.Schema.serialize(self))
+                result = jsonify(request, Verify.Schema.serialize(self))
             elif self.processing:
-                result = Response(status = 303)
+                result = Response(status=303)
                 result.location = url_for(request, self)
             elif self._rate_limit():
-                result = Response(status = 429)
+                result = Response(status=429)
             else:
                 result = None
 
@@ -315,7 +327,7 @@ class Verify(Endpoint):
         try:
             failed = False
             inf, st = _verify_wrapper(**values)
-        except Exception as e:
+        except Exception:
             failed = True
             inf = None
             st = None
@@ -324,11 +336,11 @@ class Verify(Endpoint):
             self.status._set(inf, st)
             self.processing = False
             self.failed = failed
-            return jsonify(request, __class__.Schema.serialize(self))
+            return jsonify(request, Verify.Schema.serialize(self))
 
     def _rate_limit(self):
         if self.status:
-            age = self.status.get_age();
+            age = self.status.get_age()
 
             if age and age < 3:
                 return True
@@ -343,6 +355,7 @@ class Verify(Endpoint):
         else:
             return 'idle'
 
+
 def _get_data_file_from_form(request):
     f = request.files.get('datafile', None)
 
@@ -350,6 +363,7 @@ def _get_data_file_from_form(request):
         raise Exception('Unexpected content type')
 
     return f
+
 
 def _create_workdir():
     workdir = Path('/var/local/data/recovery_data_update')
@@ -365,6 +379,7 @@ def _create_workdir():
         pass
 
     return workdir
+
 
 def _replace_recovery_system_data(request, status):
     log.info('Start replacing recovery data')
@@ -401,21 +416,23 @@ def _replace_recovery_system_data(request, status):
         status.set_step_name('verifying signature')
         import subprocess
 
-        cmd = subprocess.Popen(['gpg',
-                                '--homedir', str(gpgfile.parent),
-                                '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
-                                str(gpgfile)],
-                                cwd = str(gpgfile.parent))
+        cmd = subprocess.Popen(
+            ['gpg',
+             '--homedir', str(gpgfile.parent),
+             '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
+             str(gpgfile)],
+            cwd=str(gpgfile.parent))
+
         if cmd.wait(600) != 0:
             log.error('Invalid signature, rejecting downloaded recovery data')
-            return jsonify(request, result = 'error', reason = 'invalid signature')
+            return jsonify(request, result='error', reason='invalid signature')
 
         log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
         cmd = subprocess.Popen(['tar', 'tf', str(payload)])
         if cmd.wait(150) != 0:
             log.error('Broken archive, rejecting downloaded recovery data')
-            return jsonify(request, result = 'error', reason = 'broken archive')
+            return jsonify(request, result='error', reason='broken archive')
 
         status.set_step_name('extracting')
         mountpoint = Path('/mnt')
@@ -432,25 +449,28 @@ def _replace_recovery_system_data(request, status):
             remove_directory(imgdir, False)
 
             log.info('Extracting recovery data archive')
-            cmd = subprocess.Popen(['tar', 'xf', str(payload)], cwd = str(imgdir))
+            cmd = subprocess.Popen(['tar', 'xf', str(payload)],
+                                   cwd=str(imgdir))
+
             if cmd.wait(300) != 0:
                 log.critical('Error while extracting recovery data archive')
-                result = jsonify(request, result = 'error', reason = 'write error')
+                result = jsonify(request, result='error', reason='write error')
             else:
                 succeeded = True
-                result = jsonify(request, result = 'success', reason = 'super hero')
+                result = jsonify(request,
+                                 result='success', reason='super hero')
         elif mount_result is MountResult.ALREADY_MOUNTED:
             log.warning('Recovery data locked, cannot replace')
-            result = jsonify(request, result = 'error', reason = 'locked')
+            result = jsonify(request, result='error', reason='locked')
         elif mount_result is MountResult.FAILED:
             log.critical('Recovery data unaccessible in file system')
-            result = jsonify(request, result = 'error', reason = 'inaccessible')
+            result = jsonify(request, result='error', reason='inaccessible')
         elif mount_result is MountResult.TIMEOUT:
             log.critical('Recovery data unaccessible in file system')
-            result = jsonify(request, result = 'error', reason = 'mount timeout')
+            result = jsonify(request, result='error', reason='mount timeout')
         else:
             log.critical('Cannot replace recovery data due to some unknown error while mounting')
-            result = jsonify(request, result = 'error', reason = 'unknown')
+            result = jsonify(request, result='error', reason='unknown')
 
         if succeeded:
             log.info('Cleaning up to make new recovery data usable')
@@ -480,6 +500,7 @@ def _replace_recovery_system_data(request, status):
         remove_directory(workdir)
 
         raise
+
 
 class Replace(Endpoint):
     """**API Endpoint** - Replace the recovery system data.
@@ -544,10 +565,12 @@ class Replace(Endpoint):
         become much more complicated on client side as its application state
         will be disrupted. You have been warned.
     """
+
     class Schema(halogen.Schema):
         """Representation of :class:`Replace`."""
+
         #: Link to self.
-        self = halogen.Link(attr = 'href')
+        self = halogen.Link(attr='href')
 
         #: Short string describing the currently running step in the
         #: replacement process. Possible values are  ``idle``,
@@ -555,12 +578,15 @@ class Replace(Endpoint):
         #: ``verifying signature``, ``verifying archive``, ``extracting``, and
         #: ``finalizing``. These strings are suitable for display of progress
         #: in a user interface.
-        state = halogen.Attr(attr = lambda value: value._get_state_string())
+        state = halogen.Attr(attr=lambda value: value._get_state_string())
 
         #: Where the recovery data is coming from, either a URL or ``null``
         #: (i.e., recovery data was sent as request form data). The field will
         #: be missing in case no replacement process in active.
-        origin = halogen.Attr(attr = lambda value: value._get_data_origin() if value.processing else value.does_not_exist(), required = False)
+        origin = halogen.Attr(
+            attr=lambda value: value._get_data_origin() if value.processing else value.does_not_exist(),
+            required=False
+        )
 
     #: Path to endpoint.
     href = '/recovery/replace'
@@ -571,15 +597,16 @@ class Replace(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_replace', 'Replace recovery system data')
+        Endpoint.__init__(self, 'recovery_system_replace',
+                          'Replace recovery system data')
         self._reset()
 
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify(request, __class__.Schema.serialize(self))
+                result = jsonify(request, Replace.Schema.serialize(self))
             elif self.processing:
-                result = Response(status = 303)
+                result = Response(status=303)
                 result.location = url_for(request, self)
             else:
                 result = None
@@ -606,7 +633,7 @@ class Replace(Endpoint):
             self.step = None
             self.url = None
 
-    def set_retrieving(self, url = None):
+    def set_retrieving(self, url=None):
         """Set progress step: retrieving form data or downloading."""
         with self.lock:
             if self.processing:
@@ -625,8 +652,10 @@ class Replace(Endpoint):
     def _get_data_origin(self):
         return self.url if self.processing else None
 
+
 status_endpoint = Status()
 all_endpoints = [status_endpoint, Verify(status_endpoint), Replace()]
+
 
 def add_endpoints():
     """Register all endpoints defined in this module."""

@@ -24,20 +24,21 @@ log = get_logger('Monitor')
 import threading
 import selectors
 
+
 class ClientListener:
     def __init__(self, port, add_cb, remove_cb):
         self.is_ready = threading.Event()
         self.is_running = True
-        self.thread = threading.Thread(name = 'Monitor client listener',
-                                       target = self._worker,
-                                       args = (port, add_cb, remove_cb))
+        self.thread = threading.Thread(name='Monitor client listener',
+                                       target=self._worker,
+                                       args=(port, add_cb, remove_cb))
         self.thread.start()
         self.is_ready.wait()
 
     @staticmethod
     def _create_listening_socket(family, port):
         from socket import socket, SOL_SOCKET, SO_REUSEADDR
-        s = socket(family = family)
+        s = socket(family=family)
         s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
         s.bind(('', port))
         s.listen(100)
@@ -64,7 +65,8 @@ class ClientListener:
         kwargs['remove_cb'](conn)
 
     def kick_client(self, conn):
-        ClientListener._read(conn, None, self.sel, remove_cb = self.remove_client_cb)
+        ClientListener._read(conn, None, self.sel,
+                             remove_cb=self.remove_client_cb)
 
     def stop(self):
         from os import close
@@ -82,15 +84,19 @@ class ClientListener:
         self.remove_client_cb = remove_cb
 
         try:
-            self.server_sock = ClientListener._create_listening_socket(AF_INET6, port)
+            self.server_sock = \
+                ClientListener._create_listening_socket(AF_INET6, port)
         except:
-            self.server_sock = ClientListener._create_listening_socket(AF_INET, port)
+            self.server_sock = \
+                ClientListener._create_listening_socket(AF_INET, port)
 
-        self.sel.register(self.server_sock, selectors.EVENT_READ, ClientListener._accept_connection)
+        self.sel.register(self.server_sock, selectors.EVENT_READ,
+                          ClientListener._accept_connection)
 
         from os import pipe
         self.stop_fd_read, self.stop_fd_write = pipe()
-        self.sel.register(self.stop_fd_read, selectors.EVENT_READ, self._terminate)
+        self.sel.register(self.stop_fd_read, selectors.EVENT_READ,
+                          self._terminate)
 
         log.info('Server thread listening on port {}'.format(port))
         self.is_ready.set()
@@ -100,14 +106,16 @@ class ClientListener:
 
             for key, mask in events:
                 key.data(key.fileobj, mask, self.sel,
-                         add_cb = add_cb, remove_cb = remove_cb)
+                         add_cb=add_cb, remove_cb=remove_cb)
 
         log.info('Server thread terminates')
+
 
 class Event:
     def __init__(self, endpoint, **kwargs):
         self.endpoint = endpoint
         self.kwargs = kwargs
+
 
 def _send_message_to_client(bytes, conn):
     offset = 0
@@ -126,14 +134,15 @@ def _send_message_to_client(bytes, conn):
         except InterruptedError:
             pass
 
+
 class EventDispatcher:
     def __init__(self, clients_manager):
         from queue import Queue
         self.events = Queue(50)
         self.is_ready = threading.Event()
-        self.thread = threading.Thread(name = 'Monitor event dispatcher',
-                                       target = self._worker,
-                                       args = (clients_manager,))
+        self.thread = threading.Thread(name='Monitor event dispatcher',
+                                       target=self._worker,
+                                       args=(clients_manager,))
         self.thread.start()
         self.is_ready.wait()
 
@@ -195,8 +204,10 @@ class EventDispatcher:
 
         log.info('Event dispatcher thread terminates')
 
+
 class Monitor:
     """Event handling and distribution to listening clients."""
+
     def __init__(self):
         #: Lock for this object. The :attr:`event_dispatcher` synchronizes on
         #: this lock when it makes use of this object via context manager.
@@ -238,7 +249,8 @@ class Monitor:
                 return
 
             self.clients = {}
-            self.client_listener = ClientListener(port, self._add_client, self._remove_client)
+            self.client_listener = ClientListener(port, self._add_client,
+                                                  self._remove_client)
             self.event_dispatcher = EventDispatcher(self)
 
     def stop(self):

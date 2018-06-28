@@ -22,6 +22,7 @@ import dbus
 from .utils import get_logger
 log = get_logger('D-Bus')
 
+
 def _dbus_worker(dbh):
     """The main function of the thread created in the :class:`DBusHandler`
     constructor."""
@@ -32,14 +33,16 @@ def _dbus_worker(dbh):
 
     log.info('Thread terminates')
 
+
 class DBusHandler:
     """A thread for handling D-Bus signals."""
+
     def __init__(self):
         log.debug('Init handler')
 
         from dbus.mainloop.glib import DBusGMainLoop, threads_init
         threads_init()
-        loop = DBusGMainLoop(set_as_default = True)
+        self._loop = DBusGMainLoop(set_as_default=True)
 
         import ctypes
 
@@ -60,7 +63,7 @@ class DBusHandler:
         # just run into an exception a few lines later and be done with it.
         from os import RTLD_NOLOAD
         glib = ctypes.CDLL('libglib-2.0.so.0',
-                           mode = ctypes.RTLD_GLOBAL | RTLD_NOLOAD)
+                           mode=ctypes.RTLD_GLOBAL | RTLD_NOLOAD)
 
         log.debug('GLib handle: ' + str(glib))
         glib.g_main_loop_new.argtypes = [ctypes.c_void_p, ctypes.c_bool]
@@ -75,9 +78,9 @@ class DBusHandler:
         self._dbus_mainloop = glib.g_main_loop_new(None, False)
 
         import threading
-        self._dbus_thread = threading.Thread(name = 'D-Bus worker',
-                                             target = _dbus_worker,
-                                             args = (self,))
+        self._dbus_thread = threading.Thread(name='D-Bus worker',
+                                             target=_dbus_worker,
+                                             args=(self,))
         log.debug('Start thread ' + str(self._dbus_thread))
         self._dbus_thread.start()
 
@@ -91,6 +94,8 @@ class DBusHandler:
         self._glib_handle.g_main_loop_unref(self._dbus_mainloop)
         self._dbus_mainloop = None
         self._dbus_thread = None
+        self._loop = None
+
 
 class Bus(dbus.bus.BusConnection):
     """The D-Bus instance. We always use this one.
@@ -104,17 +109,20 @@ class Bus(dbus.bus.BusConnection):
     as a member of our :class:`Bus` class. On :meth:`close()`, this thread is
     stopped as well.
     """
+
     _shared_instance = None
     _dbus_handler = None
 
-    def __new__(cls, private = False, mainloop = None):
+    def __new__(cls, private=False, mainloop=None):
         if not private and cls._shared_instance:
             return cls._shared_instance
 
         if not cls._shared_instance:
             Bus._dbus_handler = DBusHandler()
 
-        bus = dbus.bus.BusConnection.__new__(Bus, 'unix:path=/tmp/strbo_bus_socket', mainloop = mainloop)
+        bus = dbus.bus.BusConnection.__new__(Bus,
+                                             'unix:path=/tmp/strbo_bus_socket',
+                                             mainloop=mainloop)
 
         if not private:
             cls._shared_instance = bus
@@ -130,25 +138,29 @@ class Bus(dbus.bus.BusConnection):
         Bus._dbus_handler.stop()
 
     def __repr__(self):
-        return '<%s.%s (StrBo) at %#x>' % (Bus.__module__, Bus.__name__, id(self))
+        return '<%s.%s (StrBo) at %#x>' % (Bus.__module__, Bus.__name__,
+                                           id(self))
 
     __str__ = __repr__
 
+
 class ProxyWithInterfaces:
     def __init__(self, bus_name, object_path):
-        self.proxy = Bus().get_object(bus_name, object_path, follow_name_owner_changes = True)
+        self.proxy = Bus().get_object(bus_name, object_path,
+                                      follow_name_owner_changes=True)
         self.interfaces = {}
 
     def get_interface(self, iface_name):
         iface = self.interfaces.get(iface_name, None)
 
         if not iface:
-            iface = dbus.Interface(self.proxy, dbus_interface = iface_name)
+            iface = dbus.Interface(self.proxy, dbus_interface=iface_name)
 
             if iface:
                 self.interfaces[iface_name] = iface
 
         return iface
+
 
 class InterfaceCache:
     """Cache of proxies to D-Bus objects.
@@ -160,6 +172,7 @@ class InterfaceCache:
     introspection makes D-Bus monitoring harder than necessary. Therefore, we
     strive to minimize the amount of proxy creation by caching them.
     """
+
     def __init__(self):
         self.proxies_with_interfaces = {}
 
@@ -179,7 +192,8 @@ class InterfaceCache:
 
         Any newly created proxy instance is stored in the cache.
         """
-        return self._get_proxy_with_interfaces(bus_name, object_path).get_interface(iface_name)
+        return self._get_proxy_with_interfaces(bus_name, object_path) \
+                   .get_interface(iface_name)
 
     def remove_proxy(self, bus_name, object_path):
         """Remove proxy to object at given path `object_path` on connection
@@ -189,28 +203,34 @@ class InterfaceCache:
         cache."""
         del self.proxies_with_interfaces[(bus_name, object_path)]
 
+
 class Interfaces:
     """Collection of convenience functions for retrieval of specific D-Bus
     objects.
 
-    The objects returned by these functions are cached in an :class:`InterfaceCache` object.
+    The objects returned by these functions are cached in an
+    :class:`InterfaceCache` object.
     """
+
     _cache = InterfaceCache()
 
     @staticmethod
     def airable():
         """Proxy to Airable list broker (``de.tahifi.Airable``)."""
-        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
+        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker',
+                                               '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Airable')
 
     @staticmethod
     def credentials_read():
         """Proxy to Airable list broker (``de.tahifi.Credentials.Read``)."""
-        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
+        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker',
+                                               '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Read')
 
     @staticmethod
     def credentials_write():
         """Proxy to Airable list broker (``de.tahifi.Credentials.Write``)."""
-        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker', '/de/tahifi/TuneInBroker',
+        return Interfaces._cache.get_interface('de.tahifi.TuneInBroker',
+                                               '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Write')

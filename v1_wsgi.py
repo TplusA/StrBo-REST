@@ -25,6 +25,6 @@ if __name__ == '__main__':
     init()
 
     from strbo import app
-    app.wsgi_app = CGIRootFix(app.wsgi_app, app_root = 'v1')
+    app.wsgi_app = CGIRootFix(app.wsgi_app, app_root='v1')
 
     WSGIServer(app).run()

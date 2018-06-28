@@ -48,6 +48,7 @@ may also serve you well.)
 monitor = None
 app = None
 
+
 def init():
     """Initialize this module.
 

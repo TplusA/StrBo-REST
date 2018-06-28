@@ -21,12 +21,14 @@ from enum import Enum
 from werkzeug.wrappers import Request, Response
 import json
 
+
 class MountResult(Enum):
     """Result of a mount attempt by :func:`try_mount_partition`."""
     ALREADY_MOUNTED = 1
     MOUNTED = 2
     FAILED = 3
     TIMEOUT = 4
+
 
 class UnmountResult(Enum):
     """Result of an unmount attempt by :func:`try_unmount_partition`."""
@@ -35,7 +37,8 @@ class UnmountResult(Enum):
     FAILED = 3
     TIMEOUT = 4
 
-def try_mount_partition(mountpoint, writable = False):
+
+def try_mount_partition(mountpoint, writable=False):
     """Try to mount a partition using an ``/etc/fstab`` entry.
 
     We don't try to support generic mounting of any device to any location as
@@ -54,7 +57,8 @@ def try_mount_partition(mountpoint, writable = False):
         if cmd.wait(2) == 0:
             return MountResult.ALREADY_MOUNTED
 
-        cmd = subprocess.Popen(['mount', '-o' + ('rw' if writable else 'ro'), str(mountpoint)])
+        cmd = subprocess.Popen(['mount', '-o' + ('rw' if writable else 'ro'),
+                                str(mountpoint)])
         if cmd.wait(20) != 0:
             return MountResult.FAILED
 
@@ -66,6 +70,7 @@ def try_mount_partition(mountpoint, writable = False):
         return MountResult.TIMEOUT
 
     return MountResult.FAILED
+
 
 def try_unmount_partition(mountpoint):
     """Try to unmount a partition previously mounted by a call of
@@ -93,7 +98,8 @@ def try_unmount_partition(mountpoint):
 
     return UnmountResult.FAILED
 
-def remove_directory(dir, remove_dir = True):
+
+def remove_directory(dir, remove_dir=True):
     """Recursively remove a directory.
 
     All contents of directory `dir` are removed by this function, including
@@ -116,14 +122,19 @@ def remove_directory(dir, remove_dir = True):
     if remove_dir:
         dir.rmdir()
 
+
 def request_wants_haljson(request):
     """Check whether or not the WSGI request accepts JSON data in response."""
-    best = request.accept_mimetypes.best_match(['application/hal+json', 'text/html'])
-    return best == 'application/hal+json' and request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+    best = request.accept_mimetypes.best_match(['application/hal+json',
+                                                'text/html'])
+    return best == 'application/hal+json' and \
+        request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+
 
 def request_accepts_utf8(request):
     """Check whether or not the WSGI request accepts UTF-8 encoded response."""
     return request.accept_charsets.find('utf-8') >= 0
+
 
 def _pack_json_into_response(json):
     """Create a :class:`werkzeug.wrappers.Response` instance with content type
@@ -134,7 +145,8 @@ def _pack_json_into_response(json):
     just be any kind of string; in this case, however, the content type might
     be incorrect.
     """
-    return Response(json, mimetype = 'application/hal+json')
+    return Response(json, mimetype='application/hal+json')
+
 
 def jsonify(is_utf8_ok, *args, **kwargs):
     """Create a :class:`werkzeug.wrappers.Response` instance with content type
@@ -165,7 +177,9 @@ def jsonify(is_utf8_ok, *args, **kwargs):
     else:
         use_utf8 = is_utf8_ok
 
-    return _pack_json_into_response(json.dumps(data, skipkeys = True, ensure_ascii = not use_utf8))
+    return _pack_json_into_response(json.dumps(data, skipkeys=True,
+                                               ensure_ascii=not use_utf8))
+
 
 def jsonify_simple(*args, **kwargs):
     """Serialize `args` and `kwargs` as JSON object.
@@ -181,21 +195,24 @@ def jsonify_simple(*args, **kwargs):
     else:
         data = args or kwargs
 
-    return json.dumps(data, skipkeys = True, ensure_ascii = False)
+    return json.dumps(data, skipkeys=True, ensure_ascii=False)
+
 
 def _create_syslog_handler():
     from logging.handlers import SysLogHandler
     from logging import Formatter
 
-    h = SysLogHandler(address = '/dev/log')
+    h = SysLogHandler(address='/dev/log')
     f = Formatter('%(name)s: %(message)s')
     h.setFormatter(f)
 
     return h
 
+
 _syslog_handler = _create_syslog_handler()
 
-def get_logger(suffix = None, *, prefix = 'REST', full_name = None):
+
+def get_logger(suffix=None, *, prefix='REST', full_name=None):
     """Create a logger with a specific name, logging to ``syslog``.
 
     This function is primarily concerned with the generation of a logger name

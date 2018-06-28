@@ -19,34 +19,36 @@
 
 from enum import Enum, unique
 
+
 @unique
 class ErrorCode(Enum):
     """Error codes used throughout the StrBo software stack."""
-    OK                 = 0
-    INTERNAL           = 1
-    INTERRUPTED        = 2
-    INVALID_ID         = 3
-    PHYSICAL_MEDIA_IO  = 4
-    NET_IO             = 5
-    PROTOCOL           = 6
-    AUTHENTICATION     = 7
-    INCONSISTENT       = 8
-    NOT_SUPPORTED      = 9
-    PERMISSION_DENIED  = 10
-    INVALID_URI        = 11
-    BUSY_500           = 12
-    BUSY_1000          = 13
-    BUSY_1500          = 14
-    BUSY_3000          = 15
-    BUSY_5000          = 16
-    BUSY               = 17
-    OUT_OF_RANGE       = 18
-    EMPTY              = 19
-    OVERFLOWN          = 20
-    UNDERFLOWN         = 21
+    OK = 0
+    INTERNAL = 1
+    INTERRUPTED = 2
+    INVALID_ID = 3
+    PHYSICAL_MEDIA_IO = 4
+    NET_IO = 5
+    PROTOCOL = 6
+    AUTHENTICATION = 7
+    INCONSISTENT = 8
+    NOT_SUPPORTED = 9
+    PERMISSION_DENIED = 10
+    INVALID_URI = 11
+    BUSY_500 = 12
+    BUSY_1000 = 13
+    BUSY_1500 = 14
+    BUSY_3000 = 15
+    BUSY_5000 = 16
+    BUSY = 17
+    OUT_OF_RANGE = 18
+    EMPTY = 19
+    OVERFLOWN = 20
+    UNDERFLOWN = 21
     INVALID_STREAM_URL = 22
-    INVALID_STRBO_URL  = 23
-    NOT_FOUND          = 24
+    INVALID_STRBO_URL = 23
+    NOT_FOUND = 24
+
 
 def is_error(code):
     """Check whether or not the given error code is actually an error.
@@ -58,6 +60,7 @@ def is_error(code):
         return code != 0
     else:
         return code is not ErrorCode.OK
+
 
 def to_string(code):
     """Convert error code to string representation, no exceptions thrown.
@@ -82,6 +85,7 @@ def to_string(code):
         return "*** UNKNOWN: {} ***".format(code)
     except Exception:
         return "*** UNKNOWN ERROR CODE WITH NO STRING REPRESENTATION ***"
+
 
 def to_code(code):
     """Convert integer code to :class:`ErrorCode`.

@@ -21,6 +21,7 @@ from werkzeug.wrappers import Request
 from werkzeug.routing import Map, Rule
 import halogen
 
+
 class Error(Exception):
     """Base class for exceptions thrown by :mod:`strbo.endpoint`.
 
@@ -41,7 +42,8 @@ class Error(Exception):
     message string so that nothing will be appended to ``message``. This flag
     is only considered if both, ``ep`` and ``ep_name``, are ``None``.
     """
-    def __init__(self, message, ep = None, ep_name = None, just_the_message = False):
+
+    def __init__(self, message, ep=None, ep_name=None, just_the_message=False):
         if not message:
             #: Formatted exception message.
             self.message = "Unknown error"
@@ -56,19 +58,25 @@ class Error(Exception):
         else:
             self.message = message + ' unknown endpoint'
 
+
 class GenericError(Error):
     """Any kind of error that doesn't fit into the more specific errors."""
-    def __init__(self, message, ep = None, ep_name = None):
-        Error.__init__(self, message, ep, ep_name, just_the_message = True)
+
+    def __init__(self, message, ep=None, ep_name=None):
+        Error.__init__(self, message, ep, ep_name, just_the_message=True)
+
 
 class NotCallableError(Error):
     """Thrown if an :class:`Endpoint` is called which doesn't override
     :meth:`Endpoint.__call__`."""
-    def __init__(self, ep = None, ep_name = None):
+
+    def __init__(self, ep=None, ep_name=None):
         if isinstance(ep, Endpoint):
-            Error.__init__(self, "Not callable at {}:".format(ep.href), ep, ep_name)
+            Error.__init__(self, "Not callable at {}:".format(ep.href),
+                           ep, ep_name)
         else:
             Error.__init__(self, "Not callable:", ep, ep_name)
+
 
 class SerializeError(Error):
     """Thrown in case a resource at some :class:`Endpoint` cannot be
@@ -76,8 +84,10 @@ class SerializeError(Error):
 
     This exception is thrown in conjunction with the monitoring mechanism.
     """
-    def __init__(self, ep = None, ep_name = None):
+
+    def __init__(self, ep=None, ep_name=None):
         Error.__init__(self, 'Failed serializing', ep, ep_name)
+
 
 class EmptyError(Error):
     """Thrown in case a resource at some :class:`Endpoint` is empty when it
@@ -88,8 +98,10 @@ class EmptyError(Error):
 
     This exception is thrown in conjunction with the monitoring mechanism.
     """
-    def __init__(self, ep = None, ep_name = None):
+
+    def __init__(self, ep=None, ep_name=None):
         Error.__init__(self, 'Have no data for', ep, ep_name)
+
 
 class Endpoint:
     """Definition of an API endpoint.
@@ -138,11 +150,15 @@ class Endpoint:
 
     class Schema(halogen.Schema):
         """Simple schema for generating links to ``self``."""
-        href = halogen.Attr()
-        title = halogen.Attr(required = False)
-        templated = halogen.Attr(attr = lambda value: len(value.href_for_map) > 0, required = False)
 
-    def __init__(self, id, title = None, *, href = None, href_for_map = None):
+        href = halogen.Attr()
+        title = halogen.Attr(required=False)
+        templated = halogen.Attr(
+            attr=lambda value: len(value.href_for_map) > 0,
+            required=False
+        )
+
+    def __init__(self, id, title=None, *, href=None, href_for_map=None):
         #: Endpoint ID for :mod:`werkzeug`.
         self.id = id
 
@@ -186,19 +202,24 @@ class Endpoint:
     def __call__(self, request, **values):
         raise NotCallableError(self)
 
+
 url_map = Map()
 dispatchers = {}
 
+
 def register_endpoint(e):
     """Register one endpoint."""
-    url_map.add(Rule(getattr(e, 'href_for_map', e.href), endpoint = e.id, methods = e.methods))
+    url_map.add(Rule(getattr(e, 'href_for_map', e.href),
+                     endpoint=e.id, methods=e.methods))
 
     dispatchers[e.id] = e
+
 
 def register_endpoints(es):
     """Register a set of endpoints."""
     for e in es:
         register_endpoint(e)
+
 
 def dispatch(request):
     """Dispatch one request of type :class:`werkzeug.wrappers.Request`.
@@ -212,6 +233,7 @@ def dispatch(request):
     adapter = url_map.bind_to_environ(request.environ)
     id, values = adapter.match()
     return dispatchers[id](request, **values)
+
 
 def url_for(environ_or_request, endpoint):
     """Generate a URL for an :class:`Endpoint`.
