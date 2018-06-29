@@ -56,7 +56,7 @@ class EntryPoint(Endpoint):
 
         #: Links to endpoints related to recovery system management.
         #: See :mod:`strbo.recovery`.
-        recovery = halogen.Link(halogen.types.List(Endpoint.Schema))
+        recovery_data = halogen.Link(halogen.types.List(Endpoint.Schema))
 
         #: The API version. Not a very RESTful thing to do, but might become
         #: handy at some time.
@@ -79,7 +79,7 @@ class EntryPoint(Endpoint):
         self.airable = all_airable_endpoints
 
         from .recovery import all_endpoints as all_recovery_endpoints
-        self.recovery = all_recovery_endpoints
+        self.recovery_data = all_recovery_endpoints
 
     def __call__(self, request, **values):
         from .utils import jsonify
