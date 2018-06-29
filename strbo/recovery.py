@@ -173,7 +173,7 @@ def _verify_wrapper(**values):
 import halogen
 
 from .endpoint import Endpoint, url_for
-from .utils import jsonify
+from .utils import jsonify, jsonify_nc
 
 
 class Status(Endpoint):
@@ -308,7 +308,7 @@ class Verify(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify(request, Verify.Schema.serialize(self))
+                result = jsonify_nc(request, Verify.Schema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
@@ -336,7 +336,7 @@ class Verify(Endpoint):
             self.status._set(inf, st)
             self.processing = False
             self.failed = failed
-            return jsonify(request, Verify.Schema.serialize(self))
+            return jsonify_nc(request, Verify.Schema.serialize(self))
 
     def _rate_limit(self):
         if self.status:
@@ -425,14 +425,14 @@ def _replace_recovery_system_data(request, status):
 
         if cmd.wait(600) != 0:
             log.error('Invalid signature, rejecting downloaded recovery data')
-            return jsonify(request, result='error', reason='invalid signature')
+            return jsonify_nc(request, result='error', reason='invalid signature')
 
         log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
         cmd = subprocess.Popen(['tar', 'tf', str(payload)])
         if cmd.wait(150) != 0:
             log.error('Broken archive, rejecting downloaded recovery data')
-            return jsonify(request, result='error', reason='broken archive')
+            return jsonify_nc(request, result='error', reason='broken archive')
 
         status.set_step_name('extracting')
         mountpoint = Path('/mnt')
@@ -454,23 +454,23 @@ def _replace_recovery_system_data(request, status):
 
             if cmd.wait(300) != 0:
                 log.critical('Error while extracting recovery data archive')
-                result = jsonify(request, result='error', reason='write error')
+                result = jsonify_nc(request, result='error', reason='write error')
             else:
                 succeeded = True
-                result = jsonify(request,
-                                 result='success', reason='super hero')
+                result = jsonify_nc(request,
+                                    result='success', reason='super hero')
         elif mount_result is MountResult.ALREADY_MOUNTED:
             log.warning('Recovery data locked, cannot replace')
-            result = jsonify(request, result='error', reason='locked')
+            result = jsonify_nc(request, result='error', reason='locked')
         elif mount_result is MountResult.FAILED:
             log.critical('Recovery data unaccessible in file system')
-            result = jsonify(request, result='error', reason='inaccessible')
+            result = jsonify_nc(request, result='error', reason='inaccessible')
         elif mount_result is MountResult.TIMEOUT:
             log.critical('Recovery data unaccessible in file system')
-            result = jsonify(request, result='error', reason='mount timeout')
+            result = jsonify_nc(request, result='error', reason='mount timeout')
         else:
             log.critical('Cannot replace recovery data due to some unknown error while mounting')
-            result = jsonify(request, result='error', reason='unknown')
+            result = jsonify_nc(request, result='error', reason='unknown')
 
         if succeeded:
             log.info('Cleaning up to make new recovery data usable')
@@ -604,7 +604,7 @@ class Replace(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify(request, Replace.Schema.serialize(self))
+                result = jsonify_nc(request, Replace.Schema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)

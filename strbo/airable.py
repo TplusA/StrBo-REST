@@ -473,12 +473,12 @@ class Password(Endpoint):
             timestamp = request.args.get('time', None)
 
             if token is None or timestamp is None:
-                return jsonify(request, {})
+                return jsonify_nc(request, {})
 
             iface = strbo.dbus.Interfaces.airable()
             password = iface.GeneratePassword(token, timestamp)
-            return jsonify(request, {'password': password, 'token': token,
-                                     'time': timestamp})
+            return jsonify_nc(request, {'password': password, 'token': token,
+                                        'time': timestamp})
         except:
             log.error('Failed generating Airable authentication URL')
             raise
@@ -534,10 +534,10 @@ class Redirect(Endpoint):
             error_code, url = iface.ResolveRedirect(airable_url)
 
             if listerrors.is_error(error_code):
-                result = jsonify(request,
-                                 path=path, url=airable_url,
-                                 error_code=error_code,
-                                 error=listerrors.to_string(error_code))
+                result = jsonify_nc(request,
+                                    path=path, url=airable_url,
+                                    error_code=error_code,
+                                    error=listerrors.to_string(error_code))
 
                 ec = listerrors.to_code(error_code)
 
