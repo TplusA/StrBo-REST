@@ -219,8 +219,8 @@ class Status(Endpoint):
     timestamp = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_info',
-                          'Status of the recovery system data')
+        Endpoint.__init__(self, 'recovery_data_info', name='data_info',
+                          title='Status of the recovery system data')
 
     def __call__(self, request, **values):
         with self.lock:
@@ -299,8 +299,8 @@ class Verify(Endpoint):
     lock = RLock()
 
     def __init__(self, status):
-        Endpoint.__init__(self, 'recovery_system_verify',
-                          'Verification of recovery system data')
+        Endpoint.__init__(self, 'recovery_data_verify', name='verify_data',
+                          title='Verification of recovery system data')
         self.status = status
         self.processing = False
         self.failed = False
@@ -597,8 +597,8 @@ class Replace(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_replace',
-                          'Replace recovery system data')
+        Endpoint.__init__(self, 'recovery_data_replace', name='replace_data',
+                          title='Replace recovery system data')
         self._reset()
 
     def __call__(self, request, **values):

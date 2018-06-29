@@ -108,7 +108,14 @@ class Endpoint:
 
     Parameters:
         ``id`` is a non-empty string defining the endpoint ID. It is used to
-        initialize object attribute :attr:`id`.
+        initialize object attribute :attr:`id`. This identifier must be unique
+        across the whole API as it is used by :mod:`werkzeug` for mapping URLs
+        to endpoints.
+
+        ``name`` is an optional string identifier containing the Link Relation
+        Type (identifies the semantics of the link (see :rfc:`5988`)). It is
+        used to initialize object attribute :attr:`name`. May also be ``None``,
+        in which case :attr:`name` is set to the value passed in ``id``.
 
         ``title`` is an optional string containing a short description of this
         endpoint. May also be ``None``.
@@ -153,20 +160,37 @@ class Endpoint:
 
         href = halogen.Attr()
         title = halogen.Attr(required=False)
+        name = halogen.Attr()
         templated = halogen.Attr(
             attr=lambda value: len(value.href_for_map) > 0,
             required=False
         )
 
-    def __init__(self, id, title=None, *, href=None, href_for_map=None):
+    def __init__(self, id, *, name=None, title=None, href=None, href_for_map=None):
+        if not isinstance(id, str):
+            raise TypeError("Parameter id must be a string")
+
         #: Endpoint ID for :mod:`werkzeug`.
         self.id = id
 
+        if name is None:
+            #: This is the Link Relation Type that clients can use to find the
+            #: endpoint they are interested in.
+            self.name = id
+        else:
+            if not isinstance(name, str):
+                raise TypeError("Parameter name must be a string")
+
+            self.name = name
+
         if href:
+            if not isinstance(href, str):
+                raise TypeError("Parameter href must be a string")
+
             #: Derived classes shall define their path in this attribute.
-            #: This string may also be a URI Template (RFC 6570), in which case
-            #: :attr:`href_for_map` must also be defined using :mod:`werkzeug`
-            #: syntax (see :class:`werkzeug.routing.Rule`).
+            #: This string may also be a URI Template (:rfc:`6570`), in which
+            #: case :attr:`href_for_map` must also be defined using
+            #: :mod:`werkzeug` syntax (see :class:`werkzeug.routing.Rule`).
             #
             #: Optionally, this path may also be passed to the constructor if
             #: required, but static paths should be preferred, if possible, and
@@ -174,6 +198,9 @@ class Endpoint:
             self.href = href
 
         if href_for_map:
+            if not isinstance(href_for_map, str):
+                raise TypeError("Parameter href_for_map must be a string")
+
             #: Similar to :attr:`href`, but using :mod:`werkzeug` syntax for
             #: URL routing. If :attr:`href` contains a plain URI, then this
             #: attribute shall not be #: present at all. As with :attr:`href`,
@@ -197,6 +224,9 @@ class Endpoint:
         if title:
             #: Optional endpoint description serving as documentation when
             #: navigating the API.
+            if not isinstance(title, str):
+                raise TypeError("Parameter title must be a string")
+
             self.title = title
 
     def __call__(self, request, **values):

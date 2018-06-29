@@ -112,8 +112,8 @@ class Credentials(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(
-            self, 'airable_service_credentials',
-            'Management of credentials for external music services'
+            self, 'airable_service_credentials', name='service_credentials',
+            title='Management of credentials for external music services'
         )
 
     def __call__(self, request, id, **values):
@@ -172,8 +172,8 @@ class Service:
 
         #: Embedded :class:`Credentials.SchemaShort` object. It's the partial
         #: representation so that we don't spam around sensitive data.
-        credentials = halogen.Embedded(Credentials.SchemaShort,
-                                       attr=lambda value: value)
+        service_credentials = halogen.Embedded(Credentials.SchemaShort,
+                                               attr=lambda value: value)
 
         #: Human-readable description of music service.
         description = halogen.Attr()
@@ -228,8 +228,8 @@ class ServiceInfo(Endpoint):
 
     def __init__(self, services):
         Endpoint.__init__(
-            self, 'airable_service',
-            'Accessing a specific Airable external streaming service'
+            self, 'airable_service', name='service_info',
+            title='Accessing a specific Airable external streaming service'
         )
 
         self.services = services
@@ -288,7 +288,7 @@ class Services(Endpoint):
 
         #: Embedded list of :class:`Service` objects
         #: (see :class:`Service.Schema`). Field may be missing.
-        services = halogen.Embedded(
+        service_info = halogen.Embedded(
             halogen.types.List(Service.Schema),
             attr=lambda value: [value.services[id] for id in value.services],
             required=False
@@ -302,7 +302,7 @@ class Services(Endpoint):
 
         #: Embedded list of partial :class:`Service` objects
         #: (see :class:`Service.SchemaShort`). Field may be missing.
-        services = halogen.Embedded(
+        service_info = halogen.Embedded(
             halogen.types.List(Service.SchemaShort),
             attr=lambda value: [value.services[id] for id in value.services],
             required=False
@@ -320,8 +320,8 @@ class Services(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(
-            self, 'airable_services',
-            'List of external streaming services available through Airable'
+            self, 'airable_services', name='external_services',
+            title='List of external streaming services available through Airable'
         )
 
         self.service_infos = ServiceInfo(self)
@@ -421,8 +421,10 @@ class Auth(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_authentication',
-                          'Airable authentication URL')
+        Endpoint.__init__(
+            self, 'airable_authentication', name='authentication_url',
+            title='Airable authentication URL'
+        )
 
     def __call__(self, request, **values):
         try:
@@ -464,8 +466,8 @@ class Password(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_password',
-                          'Airable password generator')
+        Endpoint.__init__(self, 'airable_password', name='password_generator',
+                          title='Airable password generator')
 
     def __call__(self, request, **values):
         try:
@@ -519,7 +521,8 @@ class Redirect(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_redirect', 'Follow Airable redirect')
+        Endpoint.__init__(self, 'airable_redirect', name='redirect',
+                          title='Follow Airable redirect')
         self.root_url = None
 
     def __call__(self, request, path, **values):
@@ -592,7 +595,7 @@ class Info(Endpoint):
 
         #: Embedded list of partial :class:`Service` objects
         #: (see :class:`Service.SchemaShort`).
-        music_services = halogen.Embedded(Services.SchemaShort)
+        external_services = halogen.Embedded(Services.SchemaShort)
 
     #: Path to endpoint.
     href = '/airable'
@@ -604,10 +607,11 @@ class Info(Endpoint):
 
     are_data_available = False
     root_url = None
-    music_services = Services()
+    external_services = Services()
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_info', 'Interfacing with Airable')
+        Endpoint.__init__(self, 'airable_info', name='info',
+                          title='Interfacing with Airable')
 
     def __call__(self, request, **values):
         cc = request.environ.get('HTTP_CACHE_CONTROL', None)
@@ -624,7 +628,7 @@ class Info(Endpoint):
     def _clear(self):
         self.are_data_available = False
         self.root_url = None
-        self.music_services._clear()
+        self.external_services._clear()
 
     def _refresh(self):
         self._clear()
@@ -632,7 +636,7 @@ class Info(Endpoint):
         try:
             iface = strbo.dbus.Interfaces.airable()
             self.root_url = iface.GetRootURL()
-            self.music_services._refresh()
+            self.external_services._refresh()
             self.are_data_available = True
         except:
             log.error('Failed retrieving information about Airable')
@@ -641,8 +645,8 @@ class Info(Endpoint):
 
 
 info_endpoint = Info()
-all_endpoints = [info_endpoint, info_endpoint.music_services,
-                 info_endpoint.music_services.service_infos,
+all_endpoints = [info_endpoint, info_endpoint.external_services,
+                 info_endpoint.external_services.service_infos,
                  Credentials(), Auth(), Password(), Redirect()]
 
 
@@ -657,7 +661,7 @@ def signal__external_service_login_status(service_id, actor_id, log_in,
         login_status['last_error_code'] = error_code
         login_status['last_error'] = listerrors.to_string(error_code)
 
-    info_endpoint.music_services.update_login_status(service_id, login_status)
+    info_endpoint.external_services.update_login_status(service_id, login_status)
 
 
 def add_endpoints():
