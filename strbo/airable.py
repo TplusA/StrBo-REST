@@ -22,7 +22,7 @@ from werkzeug.wrappers import Response
 import halogen
 
 from .endpoint import Endpoint
-from .utils import jsonify, jsonify_simple
+from .utils import jsonify, jsonify_nc, jsonify_simple
 from .utils import get_logger
 from . import monitor
 from . import listerrors
@@ -431,9 +431,7 @@ class Auth(Endpoint):
             locale = request.args.get('locale', 'de-DE')
             iface = strbo.dbus.Interfaces.airable()
             auth_url = iface.GenerateAuthenticationURL(locale)
-            result = jsonify(request, {'url': auth_url, 'locale': locale})
-            result.headers['Cache-Control'] = 'no-store, must-revalidate'
-            return result
+            return jsonify_nc(request, {'url': auth_url, 'locale': locale})
         except:
             log.error('Failed generating Airable authentication URL')
             raise

@@ -181,6 +181,14 @@ def jsonify(is_utf8_ok, *args, **kwargs):
                                                ensure_ascii=not use_utf8))
 
 
+def jsonify_nc(is_utf8_ok, *args, **kwargs):
+    """Like :func:`jsonify()`, but add HTTP headers that disallow caching of
+    the response."""
+    result = jsonify(is_utf8_ok, *args, **kwargs)
+    result.headers['Cache-Control'] = 'no-store, must-revalidate'
+    return result
+
+
 def jsonify_simple(*args, **kwargs):
     """Serialize `args` and `kwargs` as JSON object.
 
