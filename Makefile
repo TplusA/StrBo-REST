@@ -3,6 +3,7 @@
 PYTHONFILES = $(wildcard *.py strbo/*.py)
 
 FLAKE8 = flake8
+FLAKE8_OPTIONS = --exit-zero
 
 all:
 	@echo 'Valid make targets:'
@@ -18,7 +19,7 @@ check: check-relaxed
 
 check-relaxed:
 	python3 -m pyflakes $(PYTHONFILES)
-	python3 -m ${FLAKE8} --ignore=E501 $(PYTHONFILES)
+	python3 -m ${FLAKE8} ${FLAKE8_OPTIONS} --ignore=E501 $(PYTHONFILES)
 
 documentation: documentation-html documentation-pdf
 
