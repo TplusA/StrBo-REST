@@ -358,7 +358,7 @@ class Services(Endpoint):
             iface = strbo.dbus.Interfaces.credentials_read()
             self.services = {c[0]: Service(c[0], c[1])
                              for c in iface.GetKnownCategories()}
-        except:
+        except:  # noqa: E722
             log.error('Failed retrieving list of external services')
             self._clear()
             raise
@@ -432,7 +432,7 @@ class Auth(Endpoint):
             iface = strbo.dbus.Interfaces.airable()
             auth_url = iface.GenerateAuthenticationURL(locale)
             return jsonify_nc(request, {'url': auth_url, 'locale': locale})
-        except:
+        except:  # noqa: E722
             log.error('Failed generating Airable authentication URL')
             raise
 
@@ -479,7 +479,7 @@ class Password(Endpoint):
             password = iface.GeneratePassword(token, timestamp)
             return jsonify_nc(request, {'password': password, 'token': token,
                                         'time': timestamp})
-        except:
+        except:  # noqa: E722
             log.error('Failed generating Airable authentication URL')
             raise
 
@@ -565,7 +565,7 @@ class Redirect(Endpoint):
                 result.location = url
 
             return result
-        except:
+        except:  # noqa: E722
             log.error('Failed following Airable redirect')
             raise
 
@@ -636,7 +636,7 @@ class Info(Endpoint):
             self.root_url = iface.GetRootURL()
             self.external_services._refresh()
             self.are_data_available = True
-        except:
+        except:  # noqa: E722
             log.error('Failed retrieving information about Airable')
             self._clear()
             raise

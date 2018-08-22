@@ -57,7 +57,7 @@ class ClientListener:
     def _read(conn, mask, sel, **kwargs):
         try:
             log.info('Lost client {0[0]}:{0[1]}'.format(conn.getpeername()))
-        except:
+        except:  # noqa: E722
             log.info('Lost client {}'.format(conn))
 
         sel.unregister(conn)
@@ -86,7 +86,7 @@ class ClientListener:
         try:
             self.server_sock = \
                 ClientListener._create_listening_socket(AF_INET6, port)
-        except:
+        except OSError:
             self.server_sock = \
                 ClientListener._create_listening_socket(AF_INET, port)
 
@@ -318,7 +318,7 @@ class Monitor:
             for c in conns:
                 try:
                     log.info('Kicking bad client {0[0]}:{0[1]}'.format(c.getpeername()))
-                except:
+                except:  # noqa: E722
                     log.info('Kicking bad client {}'.format(c))
 
                 self.client_listener.kick_client(c)

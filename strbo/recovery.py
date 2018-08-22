@@ -160,7 +160,7 @@ def _verify_wrapper(**values):
 
     try:
         version_info, status = _get_info_and_verify(mountpoint, **values)
-    except:
+    except:  # noqa: E722
         unmount_result = try_unmount_partition(mountpoint)
         _log_unmount_attempt(mountpoint, unmount_result)
         log.error('Verification of recovery data failed')
@@ -367,7 +367,7 @@ def _create_workdir():
 
     try:
         remove_directory(workdir, False)
-    except:
+    except FileNotFoundError:
         pass
 
     try:
@@ -620,7 +620,7 @@ class Replace(Endpoint):
             result = _replace_recovery_system_data(request, self)
             self._reset()
             return result
-        except:
+        except:  # noqa: E722
             self._reset()
             raise
 
