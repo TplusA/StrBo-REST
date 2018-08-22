@@ -14,7 +14,8 @@ all:
 	@echo '  check-relaxed - Analyze code with relaxed setting, ignoring some issues'
 	@echo '  clean         - Remove all generated files'
 
-check: check-relaxed
+check:
+	python3 -m pyflakes $(PYTHONFILES)
 	python3 -m ${FLAKE8} $(PYTHONFILES)
 
 check-relaxed:
