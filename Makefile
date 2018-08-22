@@ -19,7 +19,7 @@ check: check-relaxed
 
 check-relaxed:
 	python3 -m pyflakes $(PYTHONFILES)
-	python3 -m ${FLAKE8} ${FLAKE8_OPTIONS} --ignore=E501 $(PYTHONFILES)
+	python3 -m ${FLAKE8} ${FLAKE8_OPTIONS} --ignore=E501,W504 $(PYTHONFILES)
 
 documentation: documentation-html documentation-pdf
 
