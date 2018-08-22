@@ -17,12 +17,12 @@
 # You should have received a copy of the GNU General Public License
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
+import threading
+import selectors
+
 from .endpoint import Endpoint
 from .utils import get_logger
 log = get_logger('Monitor')
-
-import threading
-import selectors
 
 
 class ClientListener:

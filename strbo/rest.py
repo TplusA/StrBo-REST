@@ -19,6 +19,8 @@
 
 import halogen
 from threading import Lock
+from werkzeug.utils import cached_property
+from werkzeug.wrappers import Request
 
 from .endpoint import Endpoint
 from .utils import get_logger
@@ -84,10 +86,6 @@ class EntryPoint(Endpoint):
     def __call__(self, request, **values):
         from .utils import jsonify
         return jsonify(request, EntryPoint.Schema.serialize(self))
-
-
-from werkzeug.utils import cached_property
-from werkzeug.wrappers import Request
 
 
 class JSONRequest(Request):

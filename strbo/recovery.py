@@ -22,7 +22,10 @@ from hashlib import sha256
 from time import time
 from threading import RLock
 from werkzeug.wrappers import Response
+import halogen
 
+from .endpoint import Endpoint, url_for
+from .utils import jsonify, jsonify_nc
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import remove_directory
@@ -168,12 +171,6 @@ def _verify_wrapper(**values):
     log.info('Verification of recovery data done: {}'.format(status['state']))
 
     return version_info, status
-
-
-import halogen
-
-from .endpoint import Endpoint, url_for
-from .utils import jsonify, jsonify_nc
 
 
 class Status(Endpoint):
