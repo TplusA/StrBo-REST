@@ -130,11 +130,13 @@ class Credentials(Endpoint):
                     username = userpass['username']
                     password = userpass['password']
 
-                    if not isinstance(username, str) or not isinstance(password, str):
-                        raise TypeError("User name and password must be strings")
+                    if not isinstance(username, str) or\
+                       not isinstance(password, str):
+                        raise TypeError(
+                            'User name and password must be strings')
 
                     if not username:
-                        raise ValueError("Empty user name")
+                        raise ValueError('Empty user name')
             except Exception as e:
                 return Response('Exception: ' + str(e), status=400)
 
@@ -147,11 +149,14 @@ class Credentials(Endpoint):
 
                 if userpass:
                     wcred_iface.SetCredentials(id, username, password, True)
-                    login_iface.ExternalServiceLogout(id, "", True, LOGIN_LOGOUT_ACTOR_ID)
-                    login_iface.ExternalServiceLogin(id, username, True, LOGIN_LOGOUT_ACTOR_ID)
+                    login_iface.ExternalServiceLogout(
+                        id, "", True, LOGIN_LOGOUT_ACTOR_ID)
+                    login_iface.ExternalServiceLogin(
+                        id, username, True, LOGIN_LOGOUT_ACTOR_ID)
                 else:
                     wcred_iface.DeleteCredentials(id, "")
-                    login_iface.ExternalServiceLogout(id, "", True, LOGIN_LOGOUT_ACTOR_ID)
+                    login_iface.ExternalServiceLogout(
+                        id, "", True, LOGIN_LOGOUT_ACTOR_ID)
             except Exception as e:
                 return Response('Exception: ' + str(e), status=500)
 
@@ -321,13 +326,15 @@ class Services(Endpoint):
     def __init__(self):
         Endpoint.__init__(
             self, 'airable_services', name='external_services',
-            title='List of external streaming services available through Airable'
+            title='List of external streaming services available '
+                  'through Airable'
         )
 
         self.service_infos = ServiceInfo(self)
 
     def __call__(self, request=None, **values):
-        cc = None if request is None else request.environ.get('HTTP_CACHE_CONTROL', None)
+        cc = None if request is None\
+            else request.environ.get('HTTP_CACHE_CONTROL', None)
 
         with self.lock:
             if cc and cc == 'no-cache':
@@ -336,7 +343,8 @@ class Services(Endpoint):
             if self.services is None:
                 self._refresh()
 
-            return self if request is None else jsonify(request, Services.Schema.serialize(self))
+            return self if request is None \
+                else jsonify(request, Services.Schema.serialize(self))
 
     def __enter__(self):
         self.lock.acquire()
@@ -369,7 +377,8 @@ class Services(Endpoint):
             if self.services is None:
                 self._refresh()
 
-            return None if self.services is None else self.services.get(id, None)
+            return None if self.services is None \
+                else self.services.get(id, None)
 
     def get_json(self, **kwargs):
         """**Event monitor support** - Called from :mod:`strbo.monitor`."""
@@ -659,7 +668,8 @@ def signal__external_service_login_status(service_id, actor_id, log_in,
         login_status['last_error_code'] = error_code
         login_status['last_error'] = listerrors.to_string(error_code)
 
-    info_endpoint.external_services.update_login_status(service_id, login_status)
+    info_endpoint.external_services.update_login_status(service_id,
+                                                        login_status)
 
 
 def add_endpoints():

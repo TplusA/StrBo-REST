@@ -166,7 +166,8 @@ class Endpoint:
             required=False
         )
 
-    def __init__(self, id, *, name=None, title=None, href=None, href_for_map=None):
+    def __init__(self, id, *,
+                 name=None, title=None, href=None, href_for_map=None):
         if not isinstance(id, str):
             raise TypeError("Parameter id must be a string")
 

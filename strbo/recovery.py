@@ -34,7 +34,8 @@ log = get_logger()
 
 
 def _generate_file_info(file, checksums):
-    expected = 'unavailable' if not checksums or file.name not in checksums else checksums[file.name]
+    expected = 'unavailable' if not checksums or file.name not in checksums\
+               else checksums[file.name]
 
     fi = {
         'name': file.name,
@@ -67,31 +68,37 @@ def _generate_file_info(file, checksums):
     if fi['is_valid']:
         log.debug('Checksum of file {} is valid'.format(file))
     else:
-        log.error('Checksum of file {} is INVALID! Expected: {} - Computed: {}'.format(file, expected, computed))
+        log.error(
+            'Checksum of file {} is INVALID! Expected: {} - Computed: {}'
+            .format(file, expected, computed))
 
     return fi
 
 
 def _log_mount_attempt(mountpoint, result):
     if result is MountResult.ALREADY_MOUNTED:
-        log.warning('Path {} is already mounted, operation in progress'.format(mountpoint))
+        log.warning('Path {} is already mounted, operation in progress'
+                    .format(mountpoint))
     elif result is MountResult.MOUNTED:
         log.info('Successfully mounted {}'.format(mountpoint))
     elif result is MountResult.FAILED:
         log.critical('Mounting {} failed'.format(mountpoint))
     elif result is MountResult.TIMEOUT:
-        log.critical('Mounting {} failed because of a timeout'.format(mountpoint))
+        log.critical('Mounting {} failed because of a timeout'
+                     .format(mountpoint))
 
 
 def _log_unmount_attempt(mountpoint, result):
     if result is UnmountResult.NOT_MOUNTED:
-        log.warning('Path {} is not mounted, cannot unmount'.format(mountpoint))
+        log.warning('Path {} is not mounted, cannot unmount'
+                    .format(mountpoint))
     elif result is UnmountResult.UNMOUNTED:
         log.info('Successfully unmounted {}'.format(mountpoint))
     elif result is UnmountResult.FAILED:
         log.critical('Unmounting {} failed'.format(mountpoint))
     elif result is UnmountResult.TIMEOUT:
-        log.critical('Unmounting {} failed because of a timeout'.format(mountpoint))
+        log.critical('Unmounting {} failed because of a timeout'
+                     .format(mountpoint))
 
 
 def _get_info_and_verify(mountpoint, **values):
@@ -133,9 +140,9 @@ def _get_info_and_verify(mountpoint, **values):
                 'commit_id': version_file[2].strip(),
             }
 
-            log.info('Recovery data version {} as of {}, commit {}'.format(version_info['number'],
-                                                                           version_info['timestamp'],
-                                                                           version_info['commit_id']))
+            log.info('Recovery data version {} as of {}, commit {}'
+                     .format(version_info['number'], version_info['timestamp'],
+                             version_info['commit_id']))
         else:
             log.error('No version information for recovery data')
 
@@ -422,7 +429,8 @@ def _replace_recovery_system_data(request, status):
 
         if cmd.wait(600) != 0:
             log.error('Invalid signature, rejecting downloaded recovery data')
-            return jsonify_nc(request, result='error', reason='invalid signature')
+            return jsonify_nc(request,
+                              result='error', reason='invalid signature')
 
         log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
@@ -451,7 +459,8 @@ def _replace_recovery_system_data(request, status):
 
             if cmd.wait(300) != 0:
                 log.critical('Error while extracting recovery data archive')
-                result = jsonify_nc(request, result='error', reason='write error')
+                result = jsonify_nc(request,
+                                    result='error', reason='write error')
             else:
                 succeeded = True
                 result = jsonify_nc(request,
@@ -464,9 +473,11 @@ def _replace_recovery_system_data(request, status):
             result = jsonify_nc(request, result='error', reason='inaccessible')
         elif mount_result is MountResult.TIMEOUT:
             log.critical('Recovery data unaccessible in file system')
-            result = jsonify_nc(request, result='error', reason='mount timeout')
+            result = jsonify_nc(request,
+                                result='error', reason='mount timeout')
         else:
-            log.critical('Cannot replace recovery data due to some unknown error while mounting')
+            log.critical('Cannot replace recovery data due to some unknown '
+                         'error while mounting')
             result = jsonify_nc(request, result='error', reason='unknown')
 
         if succeeded:
@@ -581,7 +592,8 @@ class Replace(Endpoint):
         #: (i.e., recovery data was sent as request form data). The field will
         #: be missing in case no replacement process in active.
         origin = halogen.Attr(
-            attr=lambda value: value._get_data_origin() if value.processing else value.does_not_exist(),
+            attr=lambda value: value._get_data_origin()
+            if value.processing else value.does_not_exist(),
             required=False
         )
 

@@ -166,7 +166,8 @@ def jsonify(is_utf8_ok, *args, **kwargs):
     instance which is returned by this function
     """
     if args and kwargs:
-        raise TypeError('jsonify() behavior undefined when passed both args and kwargs')
+        raise TypeError(
+            'jsonify() behavior undefined when passed both args and kwargs')
     elif len(args) == 1:
         data = args[0]
     else:
@@ -197,7 +198,8 @@ def jsonify_simple(*args, **kwargs):
     It is really just a simple wrapper around :func:`json.dumps`.
     """
     if args and kwargs:
-        raise TypeError('jsonify_simple() behavior undefined when passed both args and kwargs')
+        raise TypeError('jsonify_simple() behavior undefined when passed '
+                        'both args and kwargs')
     elif len(args) == 1:
         data = args[0]
     else:

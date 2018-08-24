@@ -173,10 +173,12 @@ class EventDispatcher:
             try:
                 message = ev.endpoint.get_json(**ev.kwargs)
             except (SerializeError, EmptyError) as e:
-                log.error('Endpoint exception while processing event: {}'.format(e.message))
+                log.error('Endpoint exception while processing event: {}'
+                          .format(e.message))
                 message = None
             except Exception as e:
-                log.error('Exception exception while processing event: {}'.format(e.message))
+                log.error('Exception exception while processing event: {}'
+                          .format(e.message))
                 message = None
 
             self.events.task_done()
@@ -196,7 +198,8 @@ class EventDispatcher:
                     try:
                         _send_message_to_client(message_as_bytes, c)
                     except Exception as e:
-                        log.error('Error while sending data to client {}: {}'.format(c, e))
+                        log.error('Error while sending data to client {}: {}'
+                                  .format(c, e))
                         bad_connections.append(c)
 
             if bad_connections:
@@ -317,7 +320,8 @@ class Monitor:
         with self._lock:
             for c in conns:
                 try:
-                    log.info('Kicking bad client {0[0]}:{0[1]}'.format(c.getpeername()))
+                    log.info('Kicking bad client {0[0]}:{0[1]}'
+                             .format(c.getpeername()))
                 except:  # noqa: E722
                     log.info('Kicking bad client {}'.format(c))
 
@@ -342,10 +346,12 @@ class Monitor:
         thread.
         """
         if not isinstance(endpoint, Endpoint):
-            raise TypeError('Only objects of type Endpoint can be sent to monitor')
+            raise TypeError(
+                'Only objects of type Endpoint can be sent to monitor')
 
         if not hasattr(endpoint, 'get_json'):
-            raise TypeError('Endpoint {} has no get_json() method'.format(str(endpoint)))
+            raise TypeError('Endpoint {} has no get_json() method'
+                            .format(str(endpoint)))
 
         with self._lock:
             if self._is_started():
