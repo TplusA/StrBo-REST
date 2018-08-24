@@ -18,10 +18,11 @@
 # along with StrBo-REST.  If not, see <http://www.gnu.org/licenses/>.
 
 from werkzeug.serving import run_simple
-from strbo import init
-from strbo import app
 
-init()
+from strbo import init
+init('/var/local/data/rest/helpers')
+
+from strbo import app  # noqa: E402
 run_simple('0.0.0.0', 5000, app,
            use_debugger=True, use_reloader=False, threaded=True)
 app.close()
