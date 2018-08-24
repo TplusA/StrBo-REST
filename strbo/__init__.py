@@ -49,11 +49,14 @@ monitor = None
 app = None
 
 
-def init():
+def init(path_to_helpers):
     """Initialize this module.
 
     Must be called before doing any with the :mod:`strbo` module.
     """
+    from .external import register_helpers
+    register_helpers(path_to_helpers)
+
     from .monitor import Monitor
     global monitor
     monitor = Monitor()

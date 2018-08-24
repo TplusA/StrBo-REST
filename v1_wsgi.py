@@ -22,7 +22,7 @@ from werkzeug.contrib.fixers import CGIRootFix
 
 if __name__ == '__main__':
     from strbo import init
-    init()
+    init('/www/strbo-rest/helpers')
 
     from strbo import app
     app.wsgi_app = CGIRootFix(app.wsgi_app, app_root='v1')

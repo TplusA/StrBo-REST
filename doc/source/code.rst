@@ -127,3 +127,6 @@ Utilities and miscellaneous
 
 .. automodule:: strbo.listerrors
    :members:
+
+.. automodule:: strbo.external
+   :members:
