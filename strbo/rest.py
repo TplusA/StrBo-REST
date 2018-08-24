@@ -119,6 +119,9 @@ class StrBo:
         self.is_monitor_started = False
         self.entry_point = EntryPoint()
 
+        from .external import Helpers
+        Helpers.set_logger(log)
+
         from .endpoint import register_endpoint
         register_endpoint(self.entry_point)
 

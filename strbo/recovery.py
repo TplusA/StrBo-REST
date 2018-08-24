@@ -418,24 +418,21 @@ def _replace_recovery_system_data(request, status):
 
         log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
-        import subprocess
 
-        cmd = subprocess.Popen(
-            ['gpg',
-             '--homedir', str(gpgfile.parent),
-             '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
-             str(gpgfile)],
-            cwd=str(gpgfile.parent))
-
-        if cmd.wait(600) != 0:
+        from .external import Tools
+        if Tools.invoke_cwd(
+                gpgfile.parent, 600,
+                'gpg', '--homedir', gpgfile.parent,
+                '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
+                gpgfile) != 0:
             log.error('Invalid signature, rejecting downloaded recovery data')
             return jsonify_nc(request,
                               result='error', reason='invalid signature')
 
         log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
-        cmd = subprocess.Popen(['tar', 'tf', str(payload)])
-        if cmd.wait(150) != 0:
+
+        if Tools.invoke(150, 'tar', 'tf', payload) != 0:
             log.error('Broken archive, rejecting downloaded recovery data')
             return jsonify_nc(request, result='error', reason='broken archive')
 
@@ -451,13 +448,11 @@ def _replace_recovery_system_data(request, status):
 
             log.warning('POINT OF NO RETURN: Deleting old recovery data')
             imgdir = mountpoint / 'images'
-            remove_directory(imgdir, False)
 
             log.info('Extracting recovery data archive')
-            cmd = subprocess.Popen(['tar', 'xf', str(payload)],
-                                   cwd=str(imgdir))
 
-            if cmd.wait(300) != 0:
+            from .external import Helpers
+            if Helpers.invoke('replace_recovery_data', payload, imgdir) != 0:
                 log.critical('Error while extracting recovery data archive')
                 result = jsonify_nc(request,
                                     result='error', reason='write error')

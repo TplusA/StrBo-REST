@@ -51,19 +51,16 @@ def try_mount_partition(mountpoint, writable=False):
     :return: A result of type :class:`MountResult`.
     """
     try:
-        import subprocess
+        from .external import Tools, Helpers
 
-        cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
-        if cmd.wait(2) == 0:
+        if Tools.invoke(2, 'mountpoint', '-q', mountpoint) == 0:
             return MountResult.ALREADY_MOUNTED
 
-        cmd = subprocess.Popen(['mount', '-o' + ('rw' if writable else 'ro'),
-                                str(mountpoint)])
-        if cmd.wait(20) != 0:
+        if Helpers.invoke('mountpoint_mount',
+                          mountpoint, 'rw' if writable else 'ro') != 0:
             return MountResult.FAILED
 
-        cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
-        if cmd.wait(1) == 0:
+        if Tools.invoke(2, 'mountpoint', '-q', mountpoint) == 0:
             return MountResult.MOUNTED
 
     except TimeoutError:
@@ -79,18 +76,15 @@ def try_unmount_partition(mountpoint):
     :return: A result of type :class:`UnmountResult`.
     """
     try:
-        import subprocess
+        from .external import Tools, Helpers
 
-        cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
-        if cmd.wait(2) != 0:
+        if Tools.invoke(2, 'mountpoint', '-q', mountpoint) != 0:
             return UnmountResult.NOT_MOUNTED
 
-        cmd = subprocess.Popen(['umount', str(mountpoint)])
-        if cmd.wait(20) != 0:
+        if Helpers.invoke('mountpoint_unmount', mountpoint) != 0:
             return UnmountResult.FAILED
 
-        cmd = subprocess.Popen(['mountpoint', '-q', str(mountpoint)])
-        if cmd.wait(1) != 0:
+        if Tools.invoke(2, 'mountpoint', '-q', mountpoint) != 0:
             return UnmountResult.UNMOUNTED
 
     except TimeoutError:

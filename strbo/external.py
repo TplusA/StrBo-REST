@@ -30,6 +30,26 @@ class Tools:
     dependencies on packages containing the executables listed in this class.
     """
     _external_tools = {
+        # package: coreutils
+        'test':         '/bin/test',
+        'rm':           '/bin/rm',
+        'readlink':     '/usr/bin/readlink',
+
+        # package: util-linux
+        'mountpoint':   '/usr/bin/mountpoint',
+
+        # package: util-linux-mount
+        'mount':        '/bin/mount',
+
+        # package: util-linux-umount
+        'umount':       '/bin/umount',
+
+        # package: tar
+        'tar':          '/bin/tar',
+
+        # package: gnupg
+        'gpg':          '/usr/bin/gpg',
+
         # package: sudo
         'sudo':         '/usr/bin/sudo',
 
@@ -181,3 +201,7 @@ class Helpers:
 def register_helpers(path):
     """Register all helper scripts expected to be found below ``path``."""
     Helpers.set_path(path)
+    Helpers.register('mountpoint_mount', ('mount', 'test'), timeout=20)
+    Helpers.register('mountpoint_unmount', ('umount', 'test'), timeout=20)
+    Helpers.register('replace_recovery_data',
+                     ('rm', 'tar', 'readlink', 'test'), timeout=300)
