@@ -163,7 +163,7 @@ def _get_info_and_verify(mountpoint, **values):
 
 def _verify_wrapper(**values):
     log.info('Start verification of recovery data')
-    mountpoint = Path('/mnt')
+    mountpoint = Path('/src')
 
     try:
         version_info, status = _get_info_and_verify(mountpoint, **values)
@@ -437,7 +437,7 @@ def _replace_recovery_system_data(request, status):
             return jsonify_nc(request, result='error', reason='broken archive')
 
         status.set_step_name('extracting')
-        mountpoint = Path('/mnt')
+        mountpoint = Path('/src')
         mount_result = try_mount_partition(mountpoint, True)
         _log_mount_attempt(mountpoint, mount_result)
 
