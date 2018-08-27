@@ -16,7 +16,7 @@ all:
 
 check:
 	python3 -m pyflakes $(PYTHONFILES)
-	python3 -m ${FLAKE8} $(PYTHONFILES)
+	python3 -m ${FLAKE8} ${FLAKE8_OPTIONS} $(PYTHONFILES)
 
 check-relaxed:
 	python3 -m pyflakes $(PYTHONFILES)
