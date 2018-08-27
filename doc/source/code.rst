@@ -13,16 +13,16 @@ How users of the API should read endpoint documentation
 Each API endpoint---some URL, plainly spoken---has a representation in the code
 documented by this documentation. They are instances of classes derived from
 the :class:`strbo.endpoint.Endpoint` base class. The
-:class:`strbo.rest.EntryPoint` class is an example for such a class, and
+:class:`strbo.rest.EntryPoint` class is an example for an endpoint class, and
 :class:`strbo.airable.Info` is another one.
 
-Two kinds of information are required to make use of an endpoint: how to send
-requests, and how to interpret the response data.
+Two kinds of information are required to make use of an endpoint:
+1. how to send requests, and 2. how to interpret the response data.
 
-Request documentation
-~~~~~~~~~~~~~~~~~~~~~
+How to read the request documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By convention adapted in this documentation, the description of each such
+By convention adapted in this documentation, the description of each
 endpoint class begins with the words "**API endpoint**" followed by a few words
 summarizing the purpose of the endpoint. Thus, all endpoints can also be found
 by searching the documentation for "API endpoint". Classes not marked with
@@ -42,13 +42,13 @@ The technically enforced restriction on usable HTTP methods is found in the
 **methods** member. Its content should match the table of HTTP methods found in
 each endpoint class documentation.
 
-Response data documentation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How to read the response data documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The data sent with responses are usually JSON objects (but always make sure the
 content type says so). These objects are documented either as a *schema*, by
 textual description in the request documentation, or by the JSON object itself
-(in case it is trivial).
+(in case the object is trivially self-descripting).
 
 Often, an endpoint will define one or more schema classes, derived from the
 :class:`halogen.schema.Schema` class from the :mod:`halogen` module (HAL+JSON
