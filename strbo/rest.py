@@ -131,9 +131,6 @@ class StrBo:
         from .recovery import add_endpoints as add_recovery_endpoints
         add_recovery_endpoints()
 
-        from .sysmon import add_endpoints as add_sysmon_endpoints
-        add_sysmon_endpoints()
-
         log.info('Up and running')
 
     def close(self):
