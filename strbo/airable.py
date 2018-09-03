@@ -273,8 +273,7 @@ class Services(Endpoint):
 
     Details on method ``GET``:
         The information are read out from the Airable list broker via D-Bus the
-        first time this endpoint is accessed. All information are cached unless
-        the client asks for fresh information (``Cache-Control: no-cache``).
+        first time this endpoint is accessed.
 
         Note that first-time access and non-cached accesses imply network
         access over the Internet. Such accesses can be slow, may result in
@@ -333,15 +332,8 @@ class Services(Endpoint):
         self.service_infos = ServiceInfo(self)
 
     def __call__(self, request=None, **values):
-        cc = None if request is None\
-            else request.environ.get('HTTP_CACHE_CONTROL', None)
-
         with self.lock:
-            if cc and cc == 'no-cache':
-                self.services = None
-
-            if self.services is None:
-                self._refresh()
+            self._refresh()
 
             return self if request is None \
                 else jsonify(request, Services.Schema.serialize(self))
@@ -612,7 +604,6 @@ class Info(Endpoint):
 
     lock = RLock()
 
-    are_data_available = False
     root_url = None
     external_services = Services()
 
@@ -621,19 +612,11 @@ class Info(Endpoint):
                           title='Interfacing with Airable')
 
     def __call__(self, request, **values):
-        cc = request.environ.get('HTTP_CACHE_CONTROL', None)
-
         with self.lock:
-            if cc and cc == 'no-cache':
-                self.are_data_available = False
-
-            if not self.are_data_available:
-                self._refresh()
-
+            self._refresh()
             return jsonify(request, Info.Schema.serialize(self))
 
     def _clear(self):
-        self.are_data_available = False
         self.root_url = None
         self.external_services._clear()
 
@@ -644,7 +627,6 @@ class Info(Endpoint):
             iface = strbo.dbus.Interfaces.airable()
             self.root_url = iface.GetRootURL()
             self.external_services._refresh()
-            self.are_data_available = True
         except:  # noqa: E722
             log.error('Failed retrieving information about Airable')
             self._clear()
