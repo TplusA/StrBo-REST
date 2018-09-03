@@ -39,6 +39,10 @@ class EntryPointSchema(halogen.Schema):
     #: See :mod:`strbo.recovery`.
     recovery_data = halogen.Link(halogen.types.List(EndpointSchema))
 
+    #: Link to network configuration management.
+    #: See :mod:`strbo.network`.
+    network_config = halogen.Link(halogen.types.List(EndpointSchema))
+
     #: The API version. Not a very RESTful thing to do, but might become
     #: handy at some time.
     api_version = halogen.Attr({'major': 0, 'minor': 1})
@@ -83,6 +87,9 @@ class EntryPoint(Endpoint):
 
         from .recovery import all_endpoints as all_recovery_endpoints
         self.recovery_data = all_recovery_endpoints
+
+        from .network import all_endpoints as all_network_config_endpoints
+        self.network_config = all_network_config_endpoints
 
     def __call__(self, request, **values):
         from .utils import jsonify
@@ -131,6 +138,9 @@ class StrBo:
 
         from .recovery import add_endpoints as add_recovery_endpoints
         add_recovery_endpoints()
+
+        from .network import add_endpoints as add_network_config_endpoints
+        add_network_config_endpoints()
 
         log.info('Up and running')
 

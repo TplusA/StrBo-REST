@@ -86,6 +86,12 @@ Main API entry point
 .. automodule:: strbo.rest
    :members:
 
+Network management
+------------------
+
+.. automodule:: strbo.network
+   :members:
+
 Airable
 -------
 
