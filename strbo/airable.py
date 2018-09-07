@@ -82,7 +82,7 @@ class Credentials(Endpoint):
         """Representation of :class:`Credentials`."""
 
         #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/service/' +
+        self = halogen.Link(attr=lambda value: '/airable/services/' +
                                                value.id + '/credentials')
 
         #: Music service ID.
@@ -95,15 +95,15 @@ class Credentials(Endpoint):
         password = halogen.Attr()
 
     class SchemaShort(halogen.Schema):
-        """Partial representation of :class:`Credentials`."""
+        """Partial representation of :class:`Service` (credentials part)."""
 
         #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/service/' +
+        self = halogen.Link(attr=lambda value: '/airable/services/' +
                                                value.id + '/credentials')
 
     #: Path to endpoint.
-    href = '/airable/service/{id}/credentials'
-    href_for_map = '/airable/service/<id>/credentials'
+    href = '/airable/services/{id}/credentials'
+    href_for_map = '/airable/services/<id>/credentials'
 
     #: Supported HTTP methods.
     methods = ('GET', 'PUT')
@@ -170,7 +170,7 @@ class Service:
         """Representation of :class:`Service`."""
 
         #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/service/' + value.id)
+        self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
 
         #: Music service ID.
         id = halogen.Attr()
@@ -192,7 +192,7 @@ class Service:
         """Partial representation of :class:`Service`."""
 
         #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/service/' + value.id)
+        self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
 
         #: Music service ID.
         id = halogen.Attr()
@@ -223,8 +223,8 @@ class ServiceInfo(Endpoint):
     """
 
     #: Path to endpoint.
-    href = '/airable/service/{id}'
-    href_for_map = '/airable/service/<id>'
+    href = '/airable/services/{id}'
+    href_for_map = '/airable/services/<id>'
 
     #: Supported HTTP methods.
     methods = ('GET',)
