@@ -78,12 +78,12 @@ class Credentials(Endpoint):
                 self.username = None
                 self.password = None
 
-    class Schema(halogen.Schema):
-        """Representation of :class:`Credentials`."""
+    class DataSchema(halogen.Schema):
+        """Representation of :class:`Credentials._Data`."""
 
         #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/services/' +
-                                               value.id + '/credentials')
+        self = halogen.Link(attr=lambda value:
+                            Credentials.url_for_music_service(value.id))
 
         #: Music service ID.
         id = halogen.Attr()
@@ -93,13 +93,6 @@ class Credentials(Endpoint):
 
         #: Password used for this music service.
         password = halogen.Attr()
-
-    class SchemaShort(halogen.Schema):
-        """Partial representation of :class:`Service` (credentials part)."""
-
-        #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/services/' +
-                                               value.id + '/credentials')
 
     #: Path to endpoint.
     href = '/airable/services/{id}/credentials'
@@ -118,8 +111,10 @@ class Credentials(Endpoint):
 
     def __call__(self, request, id, **values):
         if request.method == 'GET':
-            return jsonify(request,
-                           Credentials.Schema.serialize(Credentials._Data(id)))
+            return jsonify(
+                request,
+                Credentials.DataSchema.serialize(Credentials._Data(id))
+            )
 
         with self.lock:
             userpass = request.json
@@ -162,40 +157,48 @@ class Credentials(Endpoint):
 
         return Response(status=204)
 
+    @staticmethod
+    def url_for_music_service(music_service_id):
+        """Generate URL to credentials endpoint for given music service."""
+        return '/airable/services/' + music_service_id + '/credentials'
+
+
+class ServiceSchema(halogen.Schema):
+    """Representation of :class:`Service`."""
+
+    #: Link to self.
+    self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
+
+    #: Music service ID.
+    id = halogen.Attr()
+
+    #: Link to service credentials so that we don't spam around sensitive data
+    #: in this place.
+    service_credentials = halogen.Link(
+        attr=lambda value: Credentials.url_for_music_service(value.id)
+    )
+
+    #: Human-readable description of music service.
+    description = halogen.Attr()
+
+    #: Login status, if known. The status may be unknown (never tried to
+    #: access the music service up to this point), in which case the value
+    #: is ``null``.
+    login_status = halogen.Attr()
+
+
+class ServiceSchemaShort(halogen.Schema):
+    """Partial representation of :class:`Service`."""
+
+    #: Link to self.
+    self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
+
+    #: Music service ID.
+    id = halogen.Attr()
+
 
 class Service:
     """Information about a service accessible through Airable."""
-
-    class Schema(halogen.Schema):
-        """Representation of :class:`Service`."""
-
-        #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
-
-        #: Music service ID.
-        id = halogen.Attr()
-
-        #: Embedded :class:`Credentials.SchemaShort` object. It's the partial
-        #: representation so that we don't spam around sensitive data.
-        service_credentials = halogen.Embedded(Credentials.SchemaShort,
-                                               attr=lambda value: value)
-
-        #: Human-readable description of music service.
-        description = halogen.Attr()
-
-        #: Login status, if known. The status may be unknown (never tried to
-        #: access the music service up to this point), in which case the value
-        #: is ``null``.
-        login_status = halogen.Attr()
-
-    class SchemaShort(halogen.Schema):
-        """Partial representation of :class:`Service`."""
-
-        #: Link to self.
-        self = halogen.Link(attr=lambda value: '/airable/services/' + value.id)
-
-        #: Music service ID.
-        id = halogen.Attr()
 
     def __init__(self, id, description):
         self.id = id
@@ -215,7 +218,7 @@ class ServiceInfo(Endpoint):
     | HTTP method | Description                                      |
     +=============+==================================================+
     | ``GET``     | Read out information about music service `{id}`. |
-    |             | See :class:`Service.Schema`.                     |
+    |             | See :class:`ServiceSchema`.                      |
     +-------------+--------------------------------------------------+
 
     To avoid issues with (lack of) locking, this class should not accessed
@@ -246,7 +249,7 @@ class ServiceInfo(Endpoint):
             if service is None:
                 return jsonify(request, {})
 
-            return jsonify(request, Service.Schema.serialize(service))
+            return jsonify(request, ServiceSchema.serialize(service))
 
     def get_json(self, **kwargs):
         """**Event monitor support** - Called from :mod:`strbo.monitor`."""
@@ -257,7 +260,37 @@ class ServiceInfo(Endpoint):
                 from .endpoint import EmptyError
                 raise EmptyError(self)
 
-            return jsonify_simple({self.id: Service.Schema.serialize(service)})
+            return jsonify_simple({self.id: ServiceSchema.serialize(service)})
+
+
+class ServicesSchema(halogen.Schema):
+    """Representation of :class:`Services`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Embedded list of :class:`Service` objects
+    #: (see :class:`ServiceSchema`). Field may be missing.
+    service_info = halogen.Embedded(
+        halogen.types.List(ServiceSchema),
+        attr=lambda value: [value.services[id] for id in value.services],
+        required=False
+    )
+
+
+class ServicesSchemaShort(halogen.Schema):
+    """Partial representation of :class:`Services`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Embedded list of partial :class:`Service` objects
+    #: (see :class:`ServiceSchemaShort`). Field may be missing.
+    service_info = halogen.Embedded(
+        halogen.types.List(ServiceSchemaShort),
+        attr=lambda value: [value.services[id] for id in value.services],
+        required=False
+    )
 
 
 class Services(Endpoint):
@@ -268,7 +301,7 @@ class Services(Endpoint):
     | HTTP method | Description                                         |
     +=============+=====================================================+
     | ``GET``     | Retrieve list of external music services accessible |
-    |             | through Airable. See :class:`Services.Schema`.      |
+    |             | through Airable. See :class:`ServicesSchema`.       |
     +-------------+-----------------------------------------------------+
 
     Details on method ``GET``:
@@ -283,34 +316,6 @@ class Services(Endpoint):
         including non-cached requests; therefore, use non-cached requests
         sparingly, especially if the network seems to be slow.
     """
-
-    class Schema(halogen.Schema):
-        """Representation of :class:`Services`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Embedded list of :class:`Service` objects
-        #: (see :class:`Service.Schema`). Field may be missing.
-        service_info = halogen.Embedded(
-            halogen.types.List(Service.Schema),
-            attr=lambda value: [value.services[id] for id in value.services],
-            required=False
-        )
-
-    class SchemaShort(halogen.Schema):
-        """Partial representation of :class:`Services`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Embedded list of partial :class:`Service` objects
-        #: (see :class:`Service.SchemaShort`). Field may be missing.
-        service_info = halogen.Embedded(
-            halogen.types.List(Service.SchemaShort),
-            attr=lambda value: [value.services[id] for id in value.services],
-            required=False
-        )
 
     #: Path to endpoint.
     href = '/airable/services'
@@ -336,7 +341,7 @@ class Services(Endpoint):
             self._refresh()
 
             return self if request is None \
-                else jsonify(request, Services.Schema.serialize(self))
+                else jsonify(request, ServicesSchema.serialize(self))
 
     def __enter__(self):
         self.lock.acquire()
@@ -571,6 +576,20 @@ class Redirect(Endpoint):
             raise
 
 
+class InfoSchema(halogen.Schema):
+    """Representation of :class:`Info`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Airable API entry point.
+    root_url = halogen.Attr()
+
+    #: Embedded list of partial :class:`Service` objects
+    #: (see :class:`ServiceSchemaShort`).
+    external_services = halogen.Embedded(ServicesSchemaShort)
+
+
 class Info(Endpoint):
     """**API Endpoint** - Entry point for interfacing with Airable.
 
@@ -579,22 +598,9 @@ class Info(Endpoint):
     +=============+======================================================+
     | ``GET``     | Entry point for everything Airable, most notably the |
     |             | Airable root URL (Airable API entry point).          |
-    |             | See :class:`Info.Schema`.                            |
+    |             | See :class:`InfoSchema`.                             |
     +-------------+------------------------------------------------------+
     """
-
-    class Schema(halogen.Schema):
-        """Representation of :class:`Info`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Airable API entry point.
-        root_url = halogen.Attr()
-
-        #: Embedded list of partial :class:`Service` objects
-        #: (see :class:`Service.SchemaShort`).
-        external_services = halogen.Embedded(Services.SchemaShort)
 
     #: Path to endpoint.
     href = '/airable'
@@ -614,7 +620,7 @@ class Info(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             self._refresh()
-            return jsonify(request, Info.Schema.serialize(self))
+            return jsonify(request, InfoSchema.serialize(self))
 
     def _clear(self):
         self.root_url = None

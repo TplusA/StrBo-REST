@@ -50,18 +50,19 @@ content type says so). These objects are documented either as a *schema*, by
 textual description in the request documentation, or by the JSON object itself
 (in case the object is trivially self-descripting).
 
-Often, an endpoint will define one or more schema classes, derived from the
+Often, there will be one or more schema classes defined for an endpoint,
+derived from the
 :class:`halogen.schema.Schema` class from the :mod:`halogen` module (HAL+JSON
 package). These schema classes determine which fields will be written to the
 various JSON objects sent to clients (this information can be seen in the
 documentation), and how they are filled in (not in documentation, can only be
 seen in source code).
 
-For instance, the :class:`strbo.rest.EntryPoint` endpoint defines the
-:class:`strbo.rest.EntryPoint.Schema` schema, and the
-:class:`strbo.airable.Services` endpoint defines the schemas
-:class:`strbo.airable.Services.Schema` and
-:class:`strbo.airable.Services.SchemaShort` (a partial view on this resource
+For instance, for the :class:`strbo.rest.EntryPoint` endpoint there is the
+:class:`strbo.rest.EntryPointSchema` schema, and for the
+:class:`strbo.airable.Services` endpoint there are schemas
+:class:`strbo.airable.ServicesSchema` and
+:class:`strbo.airable.ServicesSchemaShort` (a partial view on this resource
 used when embedding it into other responses). And there is, for instance, no
 schema defined for the :class:`strbo.airable.Auth` endpoint because the output
 is simplistic and self-explanatory; you are supposed to take a look at a

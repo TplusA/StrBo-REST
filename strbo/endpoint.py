@@ -103,6 +103,18 @@ class EmptyError(Error):
         Error.__init__(self, 'Have no data for', ep, ep_name)
 
 
+class EndpointSchema(halogen.Schema):
+    """Simple schema for generating links to endpoints."""
+
+    href = halogen.Attr()
+    title = halogen.Attr(required=False)
+    name = halogen.Attr()
+    templated = halogen.Attr(
+        attr=lambda value: len(value.href_for_map) > 0,
+        required=False
+    )
+
+
 class Endpoint:
     """Definition of an API endpoint.
 
@@ -150,21 +162,7 @@ class Endpoint:
     Use functions :func:`register_endpoint` or :func:`register_endpoints` to
     register an API endpoint, i.e., any object of this class, with
     :mod:`werkzeug`.
-
-    This class also defines a simple :class:`halogen.schema.Schema` for
-    generating links to ``self``.
     """
-
-    class Schema(halogen.Schema):
-        """Simple schema for generating links to ``self``."""
-
-        href = halogen.Attr()
-        title = halogen.Attr(required=False)
-        name = halogen.Attr()
-        templated = halogen.Attr(
-            attr=lambda value: len(value.href_for_map) > 0,
-            required=False
-        )
 
     def __init__(self, id, *,
                  name=None, title=None, href=None, href_for_map=None):

@@ -22,9 +22,30 @@ from threading import Lock
 from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
 
-from .endpoint import Endpoint
+from .endpoint import Endpoint, EndpointSchema
 from .utils import get_logger
 log = get_logger()
+
+
+class EntryPointSchema(halogen.Schema):
+    """Representation of entry point."""
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Links to endpoints related to Airable. See :mod:`strbo.airable`.
+    airable = halogen.Link(halogen.types.List(EndpointSchema))
+
+    #: Links to endpoints related to recovery system management.
+    #: See :mod:`strbo.recovery`.
+    recovery_data = halogen.Link(halogen.types.List(EndpointSchema))
+
+    #: The API version. Not a very RESTful thing to do, but might become
+    #: handy at some time.
+    api_version = halogen.Attr({'major': 0, 'minor': 1})
+
+    #: TCP port of the event monitor. Field may be missing in case the
+    #: monitor has not been started.
+    monitor_port = halogen.Attr(required=False)
 
 
 class EntryPoint(Endpoint):
@@ -48,26 +69,6 @@ class EntryPoint(Endpoint):
     ENDPOINT URLS OTHER THAN THE URL OF THIS ENDPOINT.*
     """
 
-    class Schema(halogen.Schema):
-        """Representation of entry point."""
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Links to endpoints related to Airable. See :mod:`strbo.airable`.
-        airable = halogen.Link(halogen.types.List(Endpoint.Schema))
-
-        #: Links to endpoints related to recovery system management.
-        #: See :mod:`strbo.recovery`.
-        recovery_data = halogen.Link(halogen.types.List(Endpoint.Schema))
-
-        #: The API version. Not a very RESTful thing to do, but might become
-        #: handy at some time.
-        api_version = halogen.Attr({'major': 0, 'minor': 1})
-
-        #: TCP port of the event monitor. Field may be missing in case the
-        #: monitor has not been started.
-        monitor_port = halogen.Attr(required=False)
-
     #: Path to endpoint.
     href = '/'
 
@@ -85,7 +86,7 @@ class EntryPoint(Endpoint):
 
     def __call__(self, request, **values):
         from .utils import jsonify
-        return jsonify(request, EntryPoint.Schema.serialize(self))
+        return jsonify(request, EntryPointSchema.serialize(self))
 
 
 class JSONRequest(Request):

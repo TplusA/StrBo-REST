@@ -180,6 +180,25 @@ def _verify_wrapper(**values):
     return version_info, status
 
 
+class StatusSchema(halogen.Schema):
+    """Representation of :class:`Status`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Version information about recovery data stored on Streaming Board
+    #: flash memory.
+    version_info = halogen.Attr()
+
+    #: Result of last check/current status. Will be ``null`` until
+    #: verification of stored data has been triggered.
+    status = halogen.Attr()
+
+    #: Number of seconds since last verification, i.e., the age of this
+    #: verification status.
+    age = halogen.Attr(attr=lambda value: value.get_age())
+
+
 class Status(Endpoint):
     """**API Endpoint** - Read out status of the recovery system data.
 
@@ -187,28 +206,10 @@ class Status(Endpoint):
     | HTTP method | Description                                             |
     +=============+=========================================================+
     | ``GET``     | Retrieve the status of the recovery system data as of   |
-    |             | last verification. See :class:`Status.Schema`; see also |
+    |             | last verification. See :class:`StatusSchema`; see also  |
     |             | :class:`Verify` for information on verification.        |
     +-------------+---------------------------------------------------------+
     """
-
-    class Schema(halogen.Schema):
-        """Representation of :class:`Status`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Version information about recovery data stored on Streaming Board
-        #: flash memory.
-        version_info = halogen.Attr()
-
-        #: Result of last check/current status. Will be ``null`` until
-        #: verification of stored data has been triggered.
-        status = halogen.Attr()
-
-        #: Number of seconds since last verification, i.e., the age of this
-        #: verification status.
-        age = halogen.Attr(attr=lambda value: value.get_age())
 
     #: Path to endpoint.
     href = '/recovery/status'
@@ -228,7 +229,7 @@ class Status(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            return jsonify(request, Status.Schema.serialize(self))
+            return jsonify(request, StatusSchema.serialize(self))
 
     def _set(self, version_info, status):
         """Set status data. Called from :class:`Verify`."""
@@ -242,6 +243,16 @@ class Status(Endpoint):
         return time() - self.timestamp if self.timestamp else None
 
 
+class VerifySchema(halogen.Schema):
+    """Representation of :class:`Verify`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: State, either ``idle``, ``verifying``, or ``failed``.
+    state = halogen.Attr(attr=lambda value: value._get_state_string())
+
+
 class Verify(Endpoint):
     """**API Endpoint** - Verify the recovery system data.
 
@@ -249,7 +260,7 @@ class Verify(Endpoint):
     | HTTP method | Description                                      |
     +=============+==================================================+
     | ``GET``     | Retrieve status of verification process, if any. |
-    |             | See :class:`Verify.Schema`.                      |
+    |             | See :class:`VerifySchema`.                       |
     +-------------+--------------------------------------------------+
     | ``POST``    | Start verification process.                      |
     +-------------+--------------------------------------------------+
@@ -263,7 +274,7 @@ class Verify(Endpoint):
         verification has finished, which may time quite some time (several
         seconds). When done, the response contains the verification status
         object which can also be retrieved with ``GET`` (see also
-        :class:`Verify.Schema`). This saves clients to set off another ``GET``
+        :class:`VerifySchema`). This saves clients to set off another ``GET``
         request after verification and provides safe synchronization with end
         of verification.
 
@@ -285,15 +296,6 @@ class Verify(Endpoint):
     endpoint :class:`Status`.
     """
 
-    class Schema(halogen.Schema):
-        """Representation of :class:`Verify`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: State, either ``idle``, ``verifying``, or ``failed``.
-        state = halogen.Attr(attr=lambda value: value._get_state_string())
-
     #: Path to endpoint.
     href = '/recovery/verify'
 
@@ -312,7 +314,7 @@ class Verify(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify_nc(request, Verify.Schema.serialize(self))
+                result = jsonify_nc(request, VerifySchema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
@@ -340,7 +342,7 @@ class Verify(Endpoint):
             self.status._set(inf, st)
             self.processing = False
             self.failed = failed
-            return jsonify_nc(request, Verify.Schema.serialize(self))
+            return jsonify_nc(request, VerifySchema.serialize(self))
 
     def _rate_limit(self):
         if self.status:
@@ -505,6 +507,30 @@ def _replace_recovery_system_data(request, status):
         raise
 
 
+class ReplaceSchema(halogen.Schema):
+    """Representation of :class:`Replace`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Short string describing the currently running step in the
+    #: replacement process. Possible values are  ``idle``,
+    #: ``receiving request``, ``retrieving``, ``downloading``,
+    #: ``verifying signature``, ``verifying archive``, ``extracting``, and
+    #: ``finalizing``. These strings are suitable for display of progress
+    #: in a user interface.
+    state = halogen.Attr(attr=lambda value: value._get_state_string())
+
+    #: Where the recovery data is coming from, either a URL or ``null``
+    #: (i.e., recovery data was sent as request form data). The field will
+    #: be missing in case no replacement process in active.
+    origin = halogen.Attr(
+        attr=lambda value: value._get_data_origin()
+        if value.processing else value.does_not_exist(),
+        required=False
+    )
+
+
 class Replace(Endpoint):
     """**API Endpoint** - Replace the recovery system data.
 
@@ -512,7 +538,7 @@ class Replace(Endpoint):
     | HTTP method | Description                                          |
     +=============+======================================================+
     | ``GET``     | Retrieve status of data replacement process, if any. |
-    |             | See :class:`Replace.Schema`.                         |
+    |             | See :class:`ReplaceSchema`.                          |
     +-------------+------------------------------------------------------+
     | ``POST``    | Send recovery data as a substitute for the data      |
     |             | currently stored on flash memory.                    |
@@ -552,7 +578,7 @@ class Replace(Endpoint):
 
         When done, the response contains the data replacement process status
         object which can also be retrieved with ``GET`` (see also
-        :class:`Replace.Schema`). This saves clients to set off another ``GET``
+        :class:`ReplaceSchema`). This saves clients to set off another ``GET``
         request after recovery data replacement and provides safe
         synchronization with end of replacement.
 
@@ -568,29 +594,6 @@ class Replace(Endpoint):
         become much more complicated on client side as its application state
         will be disrupted. You have been warned.
     """
-
-    class Schema(halogen.Schema):
-        """Representation of :class:`Replace`."""
-
-        #: Link to self.
-        self = halogen.Link(attr='href')
-
-        #: Short string describing the currently running step in the
-        #: replacement process. Possible values are  ``idle``,
-        #: ``receiving request``, ``retrieving``, ``downloading``,
-        #: ``verifying signature``, ``verifying archive``, ``extracting``, and
-        #: ``finalizing``. These strings are suitable for display of progress
-        #: in a user interface.
-        state = halogen.Attr(attr=lambda value: value._get_state_string())
-
-        #: Where the recovery data is coming from, either a URL or ``null``
-        #: (i.e., recovery data was sent as request form data). The field will
-        #: be missing in case no replacement process in active.
-        origin = halogen.Attr(
-            attr=lambda value: value._get_data_origin()
-            if value.processing else value.does_not_exist(),
-            required=False
-        )
 
     #: Path to endpoint.
     href = '/recovery/replace'
@@ -608,7 +611,7 @@ class Replace(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify_nc(request, Replace.Schema.serialize(self))
+                result = jsonify_nc(request, ReplaceSchema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
