@@ -36,9 +36,9 @@ There is a single API entry point defined in :class:`strbo.rest.EntryPoint`
 prefix to this path or may mangle it in other ways). All other URLs found in
 the documentation are defined relative to this entry point.
 
-The API has only a single entry point and is designed to be discoverable, so is
-this documentation. Documentation is linked in a similar way as the API is
-linked with hyperlinks. It is actually possible to find full endpoint
+The API has only a single entry point and is designed to be discoverable, and
+so is this documentation. Documentation is linked in a similar way as the API
+is linked with hyperlinks. It is actually possible to find full endpoint
 documentation for all endpoints by following the links in this documentation,
 starting at its entry point :class:`strbo.rest.EntryPoint`. (Full text search
 may also serve you well.)
