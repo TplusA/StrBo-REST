@@ -25,7 +25,7 @@ from werkzeug.wrappers import Response
 import halogen
 
 from .endpoint import Endpoint, url_for
-from .utils import jsonify, jsonify_nc
+from .utils import jsonify_e, jsonify_nc, if_none_match
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import remove_directory
@@ -194,10 +194,6 @@ class StatusSchema(halogen.Schema):
     #: verification of stored data has been triggered.
     status = halogen.Attr()
 
-    #: Number of seconds since last verification, i.e., the age of this
-    #: verification status.
-    age = halogen.Attr(attr=lambda value: value.get_age())
-
 
 class Status(Endpoint):
     """**API Endpoint** - Read out status of the recovery system data.
@@ -222,14 +218,21 @@ class Status(Endpoint):
     version_info = None
     status = None
     timestamp = None
+    etag = None
 
     def __init__(self):
         Endpoint.__init__(self, 'recovery_data_info', name='data_info',
                           title='Status of the recovery system data')
+        self.etag = Status._compute_etag(self.version_info, self.status)
 
     def __call__(self, request, **values):
         with self.lock:
-            return jsonify(request, StatusSchema.serialize(self))
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
+
+            return jsonify_e(request, self.get_etag(), 5,
+                             StatusSchema.serialize(self))
 
     def _set(self, version_info, status):
         """Set status data. Called from :class:`Verify`."""
@@ -237,10 +240,21 @@ class Status(Endpoint):
             self.version_info = version_info
             self.status = status
             self.timestamp = time()
+            self.etag = Status._compute_etag(self.version_info, self.status)
 
     def get_age(self):
         """Determine the age of recovery system data status in seconds."""
         return time() - self.timestamp if self.timestamp else None
+
+    def get_etag(self):
+        with self.lock:
+            return self.etag
+
+    @staticmethod
+    def _compute_etag(version_info, status):
+        from zlib import adler32
+        temp = 'VERSION|' + str(version_info) + '|STATUS|' + str(status)
+        return "{:08x}".format(adler32(bytes(temp, 'UTF-8')))
 
 
 class VerifySchema(halogen.Schema):
@@ -314,7 +328,12 @@ class Verify(Endpoint):
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify_nc(request, VerifySchema.serialize(self))
+                cached = if_none_match(request, self.get_etag())
+                if cached:
+                    result = cached
+                else:
+                    result = jsonify_e(request, self.get_etag(), 5,
+                                       VerifySchema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
@@ -342,7 +361,8 @@ class Verify(Endpoint):
             self.status._set(inf, st)
             self.processing = False
             self.failed = failed
-            return jsonify_nc(request, VerifySchema.serialize(self))
+            return jsonify_e(request, self.get_etag(), 15,
+                             VerifySchema.serialize(self))
 
     def _rate_limit(self):
         if self.status:
@@ -360,6 +380,10 @@ class Verify(Endpoint):
             return 'failed'
         else:
             return 'idle'
+
+    def get_etag(self):
+        with self.lock:
+            return self._get_state_string()
 
 
 def _get_data_file_from_form(request):
