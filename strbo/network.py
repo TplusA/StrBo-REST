@@ -21,7 +21,7 @@ from threading import RLock
 import halogen
 
 from .endpoint import Endpoint
-from .utils import jsonify
+from .utils import jsonify_e, if_none_match
 
 
 def _assert_list_of_strings_or_empty(l):
@@ -212,6 +212,9 @@ class _EthernetNIC(_NIC):
         assert isinstance(service, _EthernetService)
         super().add_service(service)
 
+    def get_max_age(self):
+        return 8 * 3600
+
 
 class _WLANNIC(_NIC):
     """Representation of a WLAN network interface controller."""
@@ -221,6 +224,9 @@ class _WLANNIC(_NIC):
     def add_service(self, service):
         assert isinstance(service, _WLANService)
         super().add_service(service)
+
+    def get_max_age(self):
+        return 5 * 60
 
 
 class _AllNICs:
@@ -510,14 +516,20 @@ class Services(Endpoint):
 
     def __call__(self, request, id, **values):
         with self.network_endpoint:
+            cached = if_none_match(request, self.network_endpoint.get_etag())
+            if cached:
+                return cached
+
             with self.network_endpoint.get_all_nics() as nics:
                 nic = nics.get_nic_by_service_id(id)
                 service = nic.get_service_by_id(id) if nic else None
 
                 if service is None:
-                    return jsonify(request, {})
+                    return jsonify_e(request, network_endpoint.get_etag(),
+                                     5 * 60, {})
                 else:
-                    return jsonify(request, ServiceSchema.serialize(service))
+                    return jsonify_e(request, network_endpoint.get_etag(),
+                                     5 * 60, ServiceSchema.serialize(service))
 
 
 class Interfaces(Endpoint):
@@ -553,13 +565,20 @@ class Interfaces(Endpoint):
 
     def __call__(self, request, mac, **values):
         with self.network_endpoint:
+            cached = if_none_match(request, self.network_endpoint.get_etag())
+            if cached:
+                return cached
+
             with self.network_endpoint.get_all_nics() as nics:
                 nic = nics.get_nic_by_mac(mac)
 
                 if nic is None:
-                    return jsonify(request, {})
+                    return jsonify_e(request, network_endpoint.get_etag(),
+                                     5 * 60, {})
                 else:
-                    return jsonify(request, NICSchema.serialize(nic))
+                    return jsonify_e(request, network_endpoint.get_etag(),
+                                     nic.get_max_age(),
+                                     NICSchema.serialize(nic))
 
 
 class Network(Endpoint):
@@ -594,6 +613,7 @@ class Network(Endpoint):
     lock = RLock()
 
     _all_nics_cache = None
+    _all_nics_etag = None
 
     def __init__(self):
         Endpoint.__init__(self, 'network_configuration', name='network_config',
@@ -611,19 +631,27 @@ class Network(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            self._refresh()
-            return jsonify(request, NetworkSchema.serialize(self))
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
 
-    def _clear(self):
-        self._all_nics_cache = None
+            self._refresh()
+            return jsonify_e(request, self.get_etag(), 3 * 60,
+                             NetworkSchema.serialize(self))
 
     def _refresh(self):
-        self._clear()
+        import random
+        import string
+
         self._all_nics_cache = _AllNICs()
+        self._all_nics_etag =\
+            ''.join(random.sample(string.ascii_letters + string.digits, k=16))
 
     def get_all_nics(self):
-        self._refresh()
         return self._all_nics_cache
+
+    def get_etag(self):
+        return self._all_nics_etag
 
 
 network_endpoint = Network()
