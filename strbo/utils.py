@@ -176,11 +176,36 @@ def jsonify(is_utf8_ok, *args, **kwargs):
                                                ensure_ascii=not use_utf8))
 
 
+def jsonify_e(is_utf8_ok, etag, max_age, *args, **kwargs):
+    """Like :func:`jsonify()`, but add HTTP ``ETag:`` to support caching.
+
+    The ETag is simply the string pass in `etag`. If `etag` is empty or
+    ``None``, then no ``ETag:`` header is set.
+
+    The maximum time an HTTP client should hold the resource in its cache is
+    passed in `max_age`. If `max_age` is negative, then that cache control
+    variable will not be set.
+
+    Use in conjunction with :func:`if_none_match()`.
+    """
+    result = jsonify(is_utf8_ok, *args, **kwargs)
+
+    if result:
+        if etag:
+            result.set_etag(etag)
+
+        if max_age >= 0:
+            result.cache_control.max_age = max_age
+
+    return result
+
+
 def jsonify_nc(is_utf8_ok, *args, **kwargs):
     """Like :func:`jsonify()`, but add HTTP headers that disallow caching of
     the response."""
     result = jsonify(is_utf8_ok, *args, **kwargs)
-    result.headers['Cache-Control'] = 'no-store, must-revalidate'
+    result.cache_control.no_store = True
+    result.cache_control.must_revalidate = True
     return result
 
 
@@ -200,6 +225,37 @@ def jsonify_simple(*args, **kwargs):
         data = args or kwargs
 
     return json.dumps(data, skipkeys=True, ensure_ascii=False)
+
+
+def if_none_match(request, etag):
+    """Check if requested ETag matches the current ETag.
+
+    `request` is a :class:`werkzeug.wrappers.Request` whose ``if_none_match``
+    property is compared to the given `etag`. This property is set only if the
+    request HTTP header ``If-None-Match:`` was sent by the HTTP client.
+
+    The `etag` parameter contains the tag for the current version of the
+    requested object as returned in previous responses. See :func:`jsonify_e()`
+    for a way to set ETags in HTTP responses.
+
+    This function returns a 304 :class:`werkzeug.wrappers.Response` object if
+    and only if the request ETag matches the `etag` parameter. The caller
+    should return this response object as-is to the HTTP client.
+
+    In case the ETag does not match or was not set by the HTTP client, or if
+    the `etag` is ``None`` or emptye, this function returns ``None``. In this
+    case, the caller should return the requested resource along with its ETag.
+    """
+    if not request:
+        return None
+
+    if not request.if_none_match:
+        return None
+
+    if not etag:
+        return None
+
+    return Response(status=304) if etag in request.if_none_match else None
 
 
 def _create_syslog_handler():
