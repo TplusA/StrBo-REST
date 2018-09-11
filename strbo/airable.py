@@ -22,7 +22,8 @@ from werkzeug.wrappers import Response
 import halogen
 
 from .endpoint import Endpoint
-from .utils import jsonify, jsonify_nc, jsonify_simple
+from .utils import jsonify_e, jsonify_nc, jsonify_simple
+from .utils import if_none_match
 from .utils import get_logger
 from . import monitor
 from . import listerrors
@@ -111,7 +112,7 @@ class Credentials(Endpoint):
 
     def __call__(self, request, id, **values):
         if request.method == 'GET':
-            return jsonify(
+            return jsonify_nc(
                 request,
                 Credentials.DataSchema.serialize(Credentials._Data(id))
             )
@@ -244,12 +245,17 @@ class ServiceInfo(Endpoint):
 
     def __call__(self, request, id, **values):
         with self.lock:
+            cached = if_none_match(request, self.services.get_etag())
+            if cached:
+                return cached
+
             service = self.services.get_service_by_id(id)
 
             if service is None:
-                return jsonify(request, {})
+                return jsonify_e(request, self.services.get_etag(), 20, {})
 
-            return jsonify(request, ServiceSchema.serialize(service))
+            return jsonify_e(request, self.services.get_etag(), 12 * 3600,
+                             ServiceSchema.serialize(service))
 
     def get_json(self, **kwargs):
         """**Event monitor support** - Called from :mod:`strbo.monitor`."""
@@ -326,6 +332,7 @@ class Services(Endpoint):
     lock = RLock()
 
     services = None
+    services_etag = None
 
     def __init__(self):
         Endpoint.__init__(
@@ -338,10 +345,15 @@ class Services(Endpoint):
 
     def __call__(self, request=None, **values):
         with self.lock:
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
+
             self._refresh()
 
             return self if request is None \
-                else jsonify(request, ServicesSchema.serialize(self))
+                else jsonify_e(request, self.get_etag(), 12 * 3600,
+                               ServicesSchema.serialize(self))
 
     def __enter__(self):
         self.lock.acquire()
@@ -354,6 +366,7 @@ class Services(Endpoint):
     def _clear(self):
         """Remove all services. Called internally and from :class:`Info`."""
         self.services = None
+        self.services_etag = Services._compute_etag(self.services)
 
     def _refresh(self):
         """Reload all services. Called internally and from :class:`Info`."""
@@ -363,6 +376,7 @@ class Services(Endpoint):
             iface = strbo.dbus.Interfaces.credentials_read()
             self.services = {c[0]: Service(c[0], c[1])
                              for c in iface.GetKnownCategories()}
+            self.services_etag = Services._compute_etag(self.services)
         except:  # noqa: E722
             log.error('Failed retrieving list of external services')
             self._clear()
@@ -394,6 +408,26 @@ class Services(Endpoint):
 
         if send_to_monitor:
             monitor.send(self, service_id=id)
+
+    def get_etag(self):
+        with self.lock:
+            return self.services_etag
+
+    @staticmethod
+    def _compute_etag(services):
+        from zlib import adler32
+
+        i = 0
+        etag = 1
+
+        if services:
+            for k in sorted(services.keys()):
+                i += 1
+                s = services[k]
+                temp = str(i) + k + s.id + s.description + str(s.login_status)
+                etag = adler32(bytes(temp, 'UTF-8'), etag)
+
+        return "{:08x}".format(etag)
 
 
 class Auth(Endpoint):
@@ -619,8 +653,13 @@ class Info(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
+
             self._refresh()
-            return jsonify(request, InfoSchema.serialize(self))
+            return jsonify_e(request, self.get_etag(), 24 * 3600,
+                             InfoSchema.serialize(self))
 
     def _clear(self):
         self.root_url = None
@@ -637,6 +676,10 @@ class Info(Endpoint):
             log.error('Failed retrieving information about Airable')
             self._clear()
             raise
+
+    def get_etag(self):
+        with self.lock:
+            return self.external_services.get_etag()
 
 
 info_endpoint = Info()
