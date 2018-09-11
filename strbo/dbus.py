@@ -243,3 +243,10 @@ class Interfaces:
         return Interfaces._cache.get_interface('de.tahifi.TuneInBroker',
                                                '/de/tahifi/TuneInBroker',
                                                'de.tahifi.Credentials.Write')
+
+    @staticmethod
+    def dcpd_network():
+        """Proxy to DCPD networking facilities (``de.tahifi.Dcpd.Network``)."""
+        return Interfaces._cache.get_interface('de.tahifi.Dcpd',
+                                               '/de/tahifi/Dcpd',
+                                               'de.tahifi.Dcpd.Network')
