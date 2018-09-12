@@ -192,8 +192,17 @@ class InterfaceCache:
 
         Any newly created proxy instance is stored in the cache.
         """
-        return self._get_proxy_with_interfaces(bus_name, object_path) \
-                   .get_interface(iface_name)
+        proxy = self._get_proxy_with_interfaces(bus_name, object_path)
+        if not proxy:
+            raise RuntimeError('No D-Bus proxy for object {} at {}'
+                               .format(object_path, bus_name))
+
+        result = proxy.get_interface(iface_name)
+        if not result:
+            raise RuntimeError('No D-Bus interface {} on object {} at {}'
+                               .format(iface_name, object_path, bus_name))
+
+        return result
 
     def remove_proxy(self, bus_name, object_path):
         """Remove proxy to object at given path `object_path` on connection
