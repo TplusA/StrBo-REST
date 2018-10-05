@@ -797,7 +797,9 @@ class Services(Endpoint):
             ``yes`` also requests to store the configuration on the device, and
             in addition tells the network management software to consider the
             service for auto-connection. The value ``now`` is like ``yes``, but
-            tries to activate the service immediately.
+            tries to activate the service immediately. Note that for WPS
+            ``auto_connect`` must be set to ``now``, otherwise the request
+            wouldn't make any sense.
 
             ``passphrase`` is a string containing the network passphrase. This
             field is required for WLAN services.
