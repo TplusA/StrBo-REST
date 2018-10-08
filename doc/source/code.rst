@@ -80,6 +80,31 @@ be considered an implementation detail. Deal with it.
 Public API endpoints
 ====================
 
+Most endpoints deliver their data in HAL+JSON format (see
+https://tools.ietf.org/html/draft-kelly-json-hal-08). Among other things, this
+format enables the uniform and standardized representation of
+
+#. links to resource objects via pairs of link relations (such as ``self`` or
+   ``next``; see also https://tools.ietf.org/html/rfc5988#section-6.2.2) and
+   URIs; and
+#. embedded resource objects.
+
+Standardizing on HAL+JSON makes the API more self-documenting and thus
+considerably reduces the amount of documentation required for understanding
+and using the API. The StrBo REST API does not make use of CURIEs.
+
+As usual, HTTP clients must specify the content type they are willing to accept
+in the ``Accept:`` request header. The media type for HAL+JSON is
+``application/hal+json``. Clients are therefore advised to pass this media type
+in the ``Accept:`` header of their requests, even though the media type
+``application/json`` is acceptable for this purpose as well.
+
+It is also possible for HTTP clients to always pass ``*/*`` in all requests.
+In this case, however, the HTTP client *must* check the value of the
+``Content-Type:`` response header because not all endpoints can return data in
+HAL+JSON format, and those that can might not use HAL+JSON as their primary
+output format.
+
 Main API entry point
 --------------------
 

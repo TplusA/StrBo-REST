@@ -579,6 +579,9 @@ class Redirect(Endpoint):
                                     error_code=error_code,
                                     error=listerrors.to_string(error_code))
 
+                if result.status_code == 406:
+                    return result
+
                 ec = listerrors.to_code(error_code)
 
                 if ec is listerrors.ErrorCode.INTERNAL:

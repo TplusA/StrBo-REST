@@ -117,12 +117,12 @@ def remove_directory(dir, remove_dir=True):
         dir.rmdir()
 
 
-def request_wants_haljson(request):
+def request_accepts_json(request):
     """Check whether or not the WSGI request accepts JSON data in response."""
     best = request.accept_mimetypes.best_match(['application/hal+json',
-                                                'text/html'])
-    return best == 'application/hal+json' and \
-        request.accept_mimetypes[best] > request.accept_mimetypes['text/html']
+                                                'application/json',
+                                                '*/*'])
+    return best is not None and best > '*/*'
 
 
 def request_accepts_utf8(request):
@@ -147,6 +147,10 @@ def jsonify(is_utf8_ok, *args, **kwargs):
     ``application/hal+json`` containing the passed data structure serialized as
     JSON object.
 
+    In case the request didn't specify to accept JSON responses, an object
+    containing a 406 response is returned. (The request is usually passed in
+    `is_utf8_ok`, see below.)
+
     `is_utf8_ok` can be either a boolean, or, more frequently, an instance of
     :class:`werkzeug.wrappers.Request`, which includes
     :class:`strbo.rest.JSONRequest` instances. This parameter takes influence
@@ -169,6 +173,10 @@ def jsonify(is_utf8_ok, *args, **kwargs):
 
     if isinstance(is_utf8_ok, Request):
         use_utf8 = request_accepts_utf8(is_utf8_ok)
+
+        if not request_accepts_json(is_utf8_ok):
+            return Response(status=406)
+
     else:
         use_utf8 = is_utf8_ok
 
