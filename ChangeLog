@@ -1,3 +1,18 @@
+2018-10-10  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.2 released.
+
+	* Network: Enabled reading out and writing back network configuration
+	  data. The corresponding endpoints communicate with dcpd (version
+	  4.16 or above is required). Update notifications are not implemented
+	  yet.
+
+	* Caching: Support ETag headers.
+
+	* Misc: Fix versioning.
+
+	* Misc: Various clean-ups and improvements all over the place.
+
 2018-08-28  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.1 released.
