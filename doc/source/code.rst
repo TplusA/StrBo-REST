@@ -89,18 +89,20 @@ format enables the uniform and standardized representation of
    URIs; and
 #. embedded resource objects.
 
-Standardizing on HAL+JSON makes the API more self-documenting and thus
-considerably reduces the amount of documentation required for understanding
-and using the API. The StrBo REST API does not make use of CURIEs.
+Standardizing on HAL+JSON makes the API---in comparison with ad-hoc
+approaches---more self-documenting, and thus considerably reduces the amount of
+documentation required for understanding and using the API. The StrBo REST API
+does not make use of CURIEs.
 
 As usual, HTTP clients must specify the content type they are willing to accept
 in the ``Accept:`` request header. The media type for HAL+JSON is
 ``application/hal+json``. Clients are therefore advised to pass this media type
 in the ``Accept:`` header of their requests, even though the media type
-``application/json`` is acceptable for this purpose as well.
+``application/json`` is acceptable for this purpose as well. Failure to pass a
+supported media type with a request results in a response with HTTP status 406.
 
-It is also possible for HTTP clients to always pass ``*/*`` in all requests.
-In this case, however, the HTTP client *must* check the value of the
+It is also possible for HTTP clients to always pass ``Accept: */*`` in all
+requests. In this case, however, the HTTP client *must* check the value of the
 ``Content-Type:`` response header because not all endpoints can return data in
 HAL+JSON format, and those that can might not use HAL+JSON as their primary
 output format.
