@@ -351,6 +351,7 @@ class Services(Endpoint):
 
             self._refresh()
 
+            # we return ``self`` when being serialized as embedded object
             return self if request is None \
                 else jsonify_e(request, self.get_etag(), 12 * 3600,
                                ServicesSchema.serialize(self))
