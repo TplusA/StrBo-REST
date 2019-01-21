@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2019  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -45,7 +45,7 @@ class EntryPointSchema(halogen.Schema):
 
     #: The API version. Not a very RESTful thing to do, but might become
     #: handy at some time.
-    api_version = halogen.Attr({'major': 0, 'minor': 2})
+    api_version = halogen.Attr({'major': 0, 'minor': 3})
 
     #: TCP port of the event monitor. Field may be missing in case the
     #: monitor has not been started.

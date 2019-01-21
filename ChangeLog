@@ -1,3 +1,11 @@
+2019-01-21  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.3 released.
+
+	* Network: Return information about whether or not the services and
+	  NICs are cached (generally, all WLAN service information will be
+	  cached while in access point mode).
+
 2018-10-10  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.2 released.
@@ -20,4 +28,4 @@
 	* First release for testing.
 
 
-Copyright 2018 T+A elektroakustik GmbH & Co. KG
+Copyright 2018, 2019 T+A elektroakustik GmbH & Co. KG
