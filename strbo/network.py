@@ -1,6 +1,6 @@
 #! /usr/bin/env python3 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2019  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -306,7 +306,7 @@ class _ServiceConfigurationRequest:
 class _Service:
     """Representation of a generic network service."""
     def __init__(self, service_id, is_favorite, is_auto_connect, active_config,
-                 supposed_config, is_system_service, state):
+                 supposed_config, is_system_service, is_cached, state):
         assert isinstance(service_id, str)
         assert service_id
         assert isinstance(is_favorite, bool)
@@ -314,6 +314,7 @@ class _Service:
         assert isinstance(active_config, (_ServiceConfiguration, type(None)))
         assert isinstance(supposed_config, (_ServiceConfiguration, type(None)))
         assert isinstance(is_system_service, bool)
+        assert isinstance(is_cached, bool)
         assert isinstance(state, str)
         assert state
 
@@ -323,6 +324,7 @@ class _Service:
         self.is_system_service = is_system_service
         self.is_favorite = is_favorite
         self.is_auto_connect = is_auto_connect
+        self.is_cached = is_cached
         self.state = state
 
     def get_tech_and_mac(self):
@@ -333,10 +335,10 @@ class _Service:
 class _EthernetService(_Service):
     """Representation of an Ethernet network service."""
     def __init__(self, service_id, is_favorite, is_auto_connect, active_config,
-                 supposed_config, is_system_service, state):
+                 supposed_config, is_system_service, is_cached, state):
         super().__init__(service_id, is_favorite, is_auto_connect,
                          active_config, supposed_config, is_system_service,
-                         state)
+                         is_cached, state)
 
     def get_name(self):
         return 'Wired'
@@ -345,7 +347,7 @@ class _EthernetService(_Service):
 class _WLANService(_Service):
     """Representation of a WLAN network service."""
     def __init__(self, service_id, is_favorite, is_auto_connect, active_config,
-                 supposed_config, is_system_service, state, *,
+                 supposed_config, is_system_service, is_cached, state, *,
                  security=None, strength=-1,
                  wps_capability=False, wps_active=False):
         _assert_list_of_strings_or_empty(security)
@@ -355,7 +357,7 @@ class _WLANService(_Service):
 
         super().__init__(service_id, is_favorite, is_auto_connect,
                          active_config, supposed_config, is_system_service,
-                         state)
+                         is_cached, state)
 
         self.security = security
         self.strength = strength
@@ -381,17 +383,19 @@ class _NIC:
     A NIC object also stores all network services tied to that NIC. All NIC and
     service settings are queried directly from ConnMan.
     """
-    def __init__(self, devname, technology, mac):
+    def __init__(self, devname, technology, mac, is_cached):
         assert isinstance(devname, str)
         assert devname
         assert isinstance(technology, str)
         assert technology
         assert isinstance(mac, str)
         assert mac
+        assert isinstance(is_cached, bool)
 
         self.devname = devname
         self.technology = technology
         self.mac = mac.upper()
+        self.is_cached = is_cached
         self.services = {}
 
     def __iter__(self):
@@ -439,8 +443,8 @@ class _NIC:
 
 class _EthernetNIC(_NIC):
     """Representation of an Ethernet network interface controller."""
-    def __init__(self, devname, mac):
-        super().__init__(devname, 'ethernet', mac)
+    def __init__(self, devname, mac, is_cached):
+        super().__init__(devname, 'ethernet', mac, is_cached)
 
     def add_service(self, service):
         assert isinstance(service, _EthernetService)
@@ -452,8 +456,8 @@ class _EthernetNIC(_NIC):
 
 class _WLANNIC(_NIC):
     """Representation of a WLAN network interface controller."""
-    def __init__(self, devname, mac):
-        super().__init__(devname, 'wifi', mac)
+    def __init__(self, devname, mac, is_cached):
+        super().__init__(devname, 'wifi', mac, is_cached)
 
     def add_service(self, service):
         assert isinstance(service, _WLANService)
@@ -533,9 +537,11 @@ class _AllNICs:
             temp = self.get_nic_by_mac(mac)
 
             if tech == 'ethernet':
-                nic = temp if temp else _EthernetNIC(devname, mac)
+                nic = temp if temp else _EthernetNIC(devname, mac,
+                                                     service.is_cached)
             elif tech == 'wifi':
-                nic = temp if temp else _WLANNIC(devname, mac)
+                nic = temp if temp else _WLANNIC(devname, mac,
+                                                 service.is_cached)
             else:
                 raise TypeError('Unsupported technology "{}"'.format(tech))
 
@@ -640,6 +646,9 @@ class ServiceSchema(halogen.Schema):
     #: State of the services.
     state = halogen.Attr()
 
+    #: Whether or not the service information is cached (possibly outdated).
+    is_cached = halogen.Attr()
+
     #: Whether or not the service is a service defined by the system.
     is_system_service = halogen.Attr()
 
@@ -693,6 +702,9 @@ class NICSchema(halogen.Schema):
 
     #: Network technology as a string ID.
     technology = halogen.Attr()
+
+    #: Whether or not the NIC information is cached (possibly outdated).
+    is_cached = halogen.Attr()
 
     #: Network services available on this NIC.
     #: This is an array of objects serialized using the :class:`ServiceSchema`.
@@ -1024,9 +1036,11 @@ def _fill_in_data_from_dcpd(all_nics, network_configuration):
 
             tech = nic_info.get('technology', '')
             if tech.lower() == 'ethernet':
-                nic = _EthernetNIC(devname, _NIC.parse_mac_address(mac))
+                nic = _EthernetNIC(devname, _NIC.parse_mac_address(mac),
+                                   nic_info.get('cached', False))
             elif tech.lower() == 'wifi':
-                nic = _WLANNIC(devname, _NIC.parse_mac_address(mac))
+                nic = _WLANNIC(devname, _NIC.parse_mac_address(mac),
+                               nic_info.get('cached', False))
             else:
                 nic = None
 
@@ -1061,6 +1075,7 @@ def _fill_in_data_from_dcpd(all_nics, network_configuration):
                         active_service_configuration,
                         supposed_service_configuration,
                         service_info.get('is_system_service', False),
+                        service_info.get('cached', False),
                         service_info.get('state', 'unknown')
                     )
                 elif nic.technology == 'wifi':
@@ -1071,6 +1086,7 @@ def _fill_in_data_from_dcpd(all_nics, network_configuration):
                         active_service_configuration,
                         supposed_service_configuration,
                         service_info.get('is_system_service', False),
+                        service_info.get('cached', False),
                         service_info.get('state', 'unknown'),
                         security=service_info.get('security', None),
                         strength=service_info.get('strength', -1),
