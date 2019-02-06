@@ -1,3 +1,11 @@
+2019-02-06  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.4 released.
+
+	* Network: Configuration requests sent to service endpoints do not
+	  require the "wlan_info" field anymore (implementation matches the
+	  documentation now).
+
 2019-01-21  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.3 released.
