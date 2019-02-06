@@ -249,7 +249,7 @@ class _ServiceConfigurationRequest:
             return _ServiceConfigurationRequest(cfg, settings['auto_connect'],
                                                 nic=nic)
 
-        if nic and 'wlan_info' in settings:
+        if 'wlan_info' in settings:
             wlan_info = _ServiceConfigurationRequestWLANInfo.from_json(
                             settings['wlan_info'])
         else:
@@ -848,10 +848,25 @@ class Services(Endpoint):
 
                 with ep.get_all_nics() as nics:
                     nic = nics.get_nic_by_service_id(id)
+                    Services._fill_in_wlan_info(nic, id, request.json)
                     return _do_put_network_configuration(request.json, id,
                                                          nic, False)
             except AttributeError:
                 return Response(status=404)
+
+    @staticmethod
+    def _fill_in_wlan_info(nic, service_id, json):
+        service = nic.get_service_by_id(service_id) \
+                        if nic.technology == 'wifi' else None
+
+        if service:
+            json['wlan_info'] = {
+                'security': service.security,
+                'ssid': service.get_ssid(),
+                'name': service.get_name()
+            }
+        else:
+            json.pop('wlan_info', None)
 
     @staticmethod
     def _handle_http_get(request, id, ep):
