@@ -21,6 +21,7 @@ import halogen
 from threading import Lock
 from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
+from werkzeug.http import parse_options_header
 
 from .endpoint import Endpoint, EndpointSchema
 from .utils import get_logger
@@ -112,9 +113,10 @@ class JSONRequest(Request):
         this property contains ``None``. Note that the correct setting of the
         content type in the request is key to success.
         """
-        if self.headers.get('content-type') == 'application/json':
+        ct = parse_options_header(self.headers.get('content-type'))
+        if ct[0] == 'application/json':
             from json import loads
-            return loads(self.data.decode("utf-8"))
+            return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
         else:
             return None
 
