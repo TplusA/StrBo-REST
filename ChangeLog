@@ -1,3 +1,14 @@
+2020-05-07  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.6 released.
+
+	* General: Depend on Werkzeug 1.0.1.
+
+	* Misc: Use PyGObject instead of ctypes to tap into GLib. This finally
+	  works in Yocto Project "dunfell".
+
+	* Licensing: Changed license from GPLv3+ to GPLv2+.
+
 2019-06-04  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.5 released.
@@ -42,4 +53,4 @@
 	* First release for testing.
 
 
-Copyright 2018, 2019 T+A elektroakustik GmbH & Co. KG
+Copyright 2018, 2019, 2020 T+A elektroakustik GmbH & Co. KG
