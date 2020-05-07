@@ -55,7 +55,7 @@ app = None
 def init(path_to_helpers):
     """Initialize this module.
 
-    Must be called before doing any with the :mod:`strbo` module.
+    Must be called before doing anything with the :mod:`strbo` module.
     """
     from .external import register_helpers
     register_helpers(path_to_helpers)
