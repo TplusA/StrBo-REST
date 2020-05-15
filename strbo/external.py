@@ -95,7 +95,11 @@ class Files:
     Creators of REST API distribution packages are responsible for adding
     dependencies on packages containing the files listed in this class.
     """
-    _external_files = {}
+    _external_files = {
+        # package: signing-keys-packagefeed
+        'gpg_key': Path('/etc/pki/packagefeed-gpg/'
+                        'PACKAGEFEED-GPG-KEY-strbo-main-V2'),
+    }
 
     @staticmethod
     def get(file_id):
@@ -114,7 +118,10 @@ class Directories:
     :class:`Tools` and :class:`Files`) should probably become configuration
     files.
     """
-    _external_directories = {}
+    _external_directories = {
+        'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
+        'recovery_workdir': Path('/var/local/data/recovery_data_update'),
+    }
 
     @staticmethod
     def get(dir_id):

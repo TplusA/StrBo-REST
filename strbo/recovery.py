@@ -32,7 +32,7 @@ import halogen
 import re
 
 from .endpoint import Endpoint, url_for, register_endpoints
-from .external import Tools, Helpers
+from .external import Tools, Files, Directories, Helpers
 from .utils import jsonify_e, jsonify_nc, if_none_match
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
@@ -402,7 +402,7 @@ def _get_data_file_from_form(request):
 
 
 def _create_workdir():
-    workdir = Path('/var/local/data/recovery_data_update')
+    workdir = Directories.get('recovery_workdir')
 
     try:
         remove_directory(workdir, False)
@@ -449,11 +449,18 @@ def _replace_recovery_system_data(request, status):
         log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
 
-        if Tools.invoke_cwd(
-                gpgfile.parent, 600,
-                'gpg', '--homedir', gpgfile.parent,
-                '--keyring', '/usr/share/opkg/keyrings/key-93CD60C9.gpg',
-                gpgfile) != 0:
+        gpghome = Directories.get('gpg_home')
+        gpghome.mkdir(mode=0o700, exist_ok=True)
+
+        if Tools.invoke_cwd(gpgfile.parent, 15,
+                            'gpg', '--homedir', gpghome,
+                            '--import', Files.get('gpg_key')) != 0:
+            log.error('Failed to import GPG public key')
+            return jsonify_nc(request,
+                              result='error', reason='no public key')
+
+        if Tools.invoke_cwd(gpgfile.parent, 600,
+                            'gpg', '--homedir', gpghome, gpgfile) != 0:
             log.error('Invalid signature, rejecting downloaded recovery data')
             return jsonify_nc(request,
                               result='error', reason='invalid signature')
