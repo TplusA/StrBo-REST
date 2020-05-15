@@ -28,7 +28,8 @@ class Tools:
     """Keep track of external tools used by endpoint implementations and
     external helper scripts.
 
-    This is the central point to check for OS distribution packagers.
+    This, and the :class:`Files` class, is the central point to check for OS
+    distribution packagers.
 
     Creators of REST API distribution packages are responsible for adding
     dependencies on packages containing the executables listed in this class.
@@ -39,8 +40,8 @@ class Tools:
         'rm':           '/bin/rm',
         'readlink':     '/usr/bin/readlink',
 
-        # package: util-linux
-        'mountpoint':   '/usr/bin/mountpoint',
+        # package: util-linux-mountpoint
+        'mountpoint':   '/bin/mountpoint',
 
         # package: util-linux-mount
         'mount':        '/bin/mount',
@@ -63,7 +64,7 @@ class Tools:
 
     @staticmethod
     def get(tool_id):
-        """Return path to known executable or throw a :class:`KeyError`
+        """Return path to known executable, or throw a :class:`KeyError`
         exception in case the tool is unknown."""
         try:
             return Tools._external_tools[tool_id]
@@ -83,6 +84,53 @@ class Tools:
         cmd = subprocess.Popen([Tools.get(tool_id)] + [str(a) for a in args],
                                cwd=str(cwd))
         return cmd.wait(timeout)
+
+
+class Files:
+    """Keep track of system files used by the implementation.
+
+    This, and the :class:`Tools` class, is the central point to check for OS
+    distribution packagers.
+
+    Creators of REST API distribution packages are responsible for adding
+    dependencies on packages containing the files listed in this class.
+    """
+    _external_files = {
+        # package: signing-keys-packagefeed
+        'gpg_key': Path('/etc/pki/packagefeed-gpg/'
+                        'PACKAGEFEED-GPG-KEY-strbo-main-V2'),
+    }
+
+    @staticmethod
+    def get(file_id):
+        """Return path to known file by its symbolic name, or throw a
+        :class:`KeyError` exception in case the file is unknown."""
+        try:
+            return Files._external_files[file_id]
+        except KeyError:
+            raise KeyError('File {} not registered'.format(file_id))
+
+
+class Directories:
+    """Keep track of directories used by the implementation.
+
+    Central point for adapting directories. This class (and classes
+    :class:`Tools` and :class:`Files`) should probably become configuration
+    files.
+    """
+    _external_directories = {
+        'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
+        'recovery_workdir': Path('/var/local/data/recovery_data_update'),
+    }
+
+    @staticmethod
+    def get(dir_id):
+        """Return directory by its symbolic name, or throw a :class:`KeyError`
+        exception in case the directory is unknown."""
+        try:
+            return Directories._external_directories[dir_id]
+        except KeyError:
+            raise KeyError('Directory {} not registered'.format(dir_id))
 
 
 class _Helper:
