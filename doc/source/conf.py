@@ -37,7 +37,7 @@ extensions = [
 
 intersphinx_mapping = {
     'pythonorg': ('https://docs.python.org/3', None),
-    'werkzeug': ('http://werkzeug.pocoo.org/docs/0.14', None),
+    'werkzeug': ('https://werkzeug.palletsprojects.com/en/1.0.x', None),
     'halogen': ('https://halogen.readthedocs.io/en/latest/', None),
 }
 
