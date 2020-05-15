@@ -33,13 +33,13 @@ import dbus.exceptions
 log = get_logger()
 
 
-def _assert_list_of_strings_or_empty(l):
-    if l is None:
+def _assert_list_of_strings_or_empty(ls):
+    if ls is None:
         return
 
-    assert isinstance(l, list)
+    assert isinstance(ls, list)
 
-    for elem in l:
+    for elem in ls:
         assert isinstance(elem, str)
         assert elem
 
