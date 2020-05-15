@@ -39,8 +39,8 @@ class Tools:
         'rm':           '/bin/rm',
         'readlink':     '/usr/bin/readlink',
 
-        # package: util-linux
-        'mountpoint':   '/usr/bin/mountpoint',
+        # package: util-linux-mountpoint
+        'mountpoint':   '/bin/mountpoint',
 
         # package: util-linux-mount
         'mount':        '/bin/mount',
