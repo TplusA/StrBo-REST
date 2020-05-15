@@ -109,6 +109,9 @@ def remove_directory(dir, remove_dir=True):
     If `remove_dir` is ``True``, then this function behaves exactly like
     ``rm -r dir``.
     """
+    if not dir.is_dir():
+        return
+
     for item in dir.iterdir():
         if item.is_dir() and not item.is_symlink():
             remove_directory(item, True)
