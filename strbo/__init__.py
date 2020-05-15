@@ -47,6 +47,10 @@ starting at its entry point :class:`strbo.rest.EntryPoint`. (Full text search
 may also serve you well.)
 """
 
+from .external import register_helpers
+from .monitor import Monitor
+from .dbus import Bus
+from .rest import StrBo
 
 monitor = None
 app = None
@@ -57,17 +61,13 @@ def init(path_to_helpers):
 
     Must be called before doing anything with the :mod:`strbo` module.
     """
-    from .external import register_helpers
     register_helpers(path_to_helpers)
 
-    from .monitor import Monitor
     global monitor
     monitor = Monitor()
 
     # create the shared D-Bus instance
-    from .dbus import Bus
     Bus()
 
-    from .rest import StrBo
     global app
     app = StrBo()

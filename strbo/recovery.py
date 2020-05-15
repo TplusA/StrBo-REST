@@ -25,9 +25,14 @@ from hashlib import sha256
 from time import time
 from threading import RLock
 from werkzeug.wrappers import Response
+from werkzeug.datastructures import FileStorage
+from urllib.request import urlopen
+from zlib import adler32
 import halogen
+import re
 
-from .endpoint import Endpoint, url_for
+from .endpoint import Endpoint, url_for, register_endpoints
+from .external import Tools, Helpers
 from .utils import jsonify_e, jsonify_nc, if_none_match
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
@@ -121,7 +126,6 @@ def _get_info_and_verify(mountpoint, **values):
             with temp.open() as f:
                 checksums = {}
                 for l in f:
-                    import re
                     checksum, filename = re.split(r' +', l.strip())
                     checksums[filename] = checksum
         else:
@@ -255,7 +259,6 @@ class Status(Endpoint):
 
     @staticmethod
     def _compute_etag(version_info, status):
-        from zlib import adler32
         temp = 'VERSION|' + str(version_info) + '|STATUS|' + str(status)
         return "{:08x}".format(adler32(bytes(temp, 'UTF-8')))
 
@@ -434,8 +437,6 @@ def _replace_recovery_system_data(request, status):
 
     try:
         if url_from_form:
-            from urllib.request import urlopen
-            from werkzeug.datastructures import FileStorage
             url = urlopen(url_from_form)
             f = FileStorage(url, gpgfile.name)
             f.save(str(gpgfile))
@@ -448,7 +449,6 @@ def _replace_recovery_system_data(request, status):
         log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
 
-        from .external import Tools
         if Tools.invoke_cwd(
                 gpgfile.parent, 600,
                 'gpg', '--homedir', gpgfile.parent,
@@ -480,7 +480,6 @@ def _replace_recovery_system_data(request, status):
 
             log.info('Extracting recovery data archive')
 
-            from .external import Helpers
             if Helpers.invoke('replace_recovery_data', payload, imgdir) != 0:
                 log.critical('Error while extracting recovery data archive')
                 result = jsonify_nc(request,
@@ -693,5 +692,4 @@ all_endpoints = [status_endpoint, Verify(status_endpoint), Replace()]
 
 def add_endpoints():
     """Register all endpoints defined in this module."""
-    from .endpoint import register_endpoints
     register_endpoints(all_endpoints)

@@ -22,8 +22,11 @@
 
 import threading
 import selectors
+import socket
+import os
+from queue import Queue
 
-from .endpoint import Endpoint
+from .endpoint import Endpoint, SerializeError, EmptyError
 from .utils import get_logger
 log = get_logger('Monitor')
 
@@ -40,9 +43,8 @@ class ClientListener:
 
     @staticmethod
     def _create_listening_socket(family, port):
-        from socket import socket, SOL_SOCKET, SO_REUSEADDR
-        s = socket(family=family)
-        s.setsockopt(SOL_SOCKET, SO_REUSEADDR, 1)
+        s = socket.socket(family=family)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind(('', port))
         s.listen(100)
         s.setblocking(False)
@@ -72,9 +74,8 @@ class ClientListener:
                              remove_cb=self.remove_client_cb)
 
     def stop(self):
-        from os import close
-        close(self.stop_fd_write)
-        close(self.stop_fd_read)
+        os.close(self.stop_fd_write)
+        os.close(self.stop_fd_read)
         self.thread.join()
         self.thread = None
 
@@ -82,22 +83,20 @@ class ClientListener:
         self.is_running = False
 
     def _worker(self, port, add_cb, remove_cb):
-        from socket import AF_INET, AF_INET6
         self.sel = selectors.DefaultSelector()
         self.remove_client_cb = remove_cb
 
         try:
             self.server_sock = \
-                ClientListener._create_listening_socket(AF_INET6, port)
+                ClientListener._create_listening_socket(socket.AF_INET6, port)
         except OSError:
             self.server_sock = \
-                ClientListener._create_listening_socket(AF_INET, port)
+                ClientListener._create_listening_socket(socket.AF_INET, port)
 
         self.sel.register(self.server_sock, selectors.EVENT_READ,
                           ClientListener._accept_connection)
 
-        from os import pipe
-        self.stop_fd_read, self.stop_fd_write = pipe()
+        self.stop_fd_read, self.stop_fd_write = os.pipe()
         self.sel.register(self.stop_fd_read, selectors.EVENT_READ,
                           self._terminate)
 
@@ -140,7 +139,6 @@ def _send_message_to_client(bytes, conn):
 
 class EventDispatcher:
     def __init__(self, clients_manager):
-        from queue import Queue
         self.events = Queue(50)
         self.is_ready = threading.Event()
         self.thread = threading.Thread(name='Monitor event dispatcher',
@@ -170,8 +168,6 @@ class EventDispatcher:
             if ev is None:
                 self.events.task_done()
                 break
-
-            from .endpoint import SerializeError, EmptyError
 
             try:
                 message = ev.endpoint.get_json(**ev.kwargs)

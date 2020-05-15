@@ -25,9 +25,19 @@ from threading import Lock
 from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
 from werkzeug.http import parse_options_header
+from json import loads
 
-from .endpoint import Endpoint, EndpointSchema
-from .utils import get_logger
+from .airable import all_endpoints as all_airable_endpoints
+from .airable import add_endpoints as add_airable_endpoints
+from .recovery import all_endpoints as all_recovery_endpoints
+from .recovery import add_endpoints as add_recovery_endpoints
+from .network import all_endpoints as all_network_config_endpoints
+from .network import add_endpoints as add_network_config_endpoints
+
+from .dbus import Bus
+from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
+from .external import Helpers
+from .utils import get_logger, jsonify
 log = get_logger()
 
 
@@ -86,17 +96,11 @@ class EntryPoint(Endpoint):
     def __init__(self):
         Endpoint.__init__(self, 'entry_point')
 
-        from .airable import all_endpoints as all_airable_endpoints
         self.airable = all_airable_endpoints
-
-        from .recovery import all_endpoints as all_recovery_endpoints
         self.recovery_data = all_recovery_endpoints
-
-        from .network import all_endpoints as all_network_config_endpoints
         self.network_config = all_network_config_endpoints
 
     def __call__(self, request, **values):
-        from .utils import jsonify
         return jsonify(request, EntryPointSchema.serialize(self))
 
 
@@ -118,7 +122,6 @@ class JSONRequest(Request):
         """
         ct = parse_options_header(self.headers.get('content-type'))
         if ct[0] == 'application/json':
-            from json import loads
             return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
         else:
             return None
@@ -132,19 +135,12 @@ class StrBo:
         self.is_monitor_started = False
         self.entry_point = EntryPoint()
 
-        from .external import Helpers
         Helpers.set_logger(log)
 
-        from .endpoint import register_endpoint
         register_endpoint(self.entry_point)
 
-        from .airable import add_endpoints as add_airable_endpoints
         add_airable_endpoints()
-
-        from .recovery import add_endpoints as add_recovery_endpoints
         add_recovery_endpoints()
-
-        from .network import add_endpoints as add_network_config_endpoints
         add_network_config_endpoints()
 
         log.info('Up and running')
@@ -157,7 +153,6 @@ class StrBo:
                 monitor.stop()
                 self.is_monitor_started = False
 
-            from .dbus import Bus
             Bus().close()
 
     def _start_monitor(self, server_port):
@@ -183,7 +178,6 @@ class StrBo:
         if not self.is_monitor_started:
             self._start_monitor(environ.get('SERVER_PORT', None))
 
-        from .endpoint import dispatch
         request = JSONRequest(environ)
         response = dispatch(request)
         return response(environ, start_response)

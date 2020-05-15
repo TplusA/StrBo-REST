@@ -23,6 +23,10 @@
 from enum import Enum
 from werkzeug.wrappers import Request, Response
 import json
+import logging
+import logging.handlers
+
+from .external import Tools, Helpers
 
 
 class MountResult(Enum):
@@ -54,8 +58,6 @@ def try_mount_partition(mountpoint, writable=False):
     :return: A result of type :class:`MountResult`.
     """
     try:
-        from .external import Tools, Helpers
-
         if Tools.invoke(2, 'mountpoint', '-q', mountpoint) == 0:
             return MountResult.ALREADY_MOUNTED
 
@@ -79,8 +81,6 @@ def try_unmount_partition(mountpoint):
     :return: A result of type :class:`UnmountResult`.
     """
     try:
-        from .external import Tools, Helpers
-
         if Tools.invoke(2, 'mountpoint', '-q', mountpoint) != 0:
             return UnmountResult.NOT_MOUNTED
 
@@ -270,11 +270,8 @@ def if_none_match(request, etag):
 
 
 def _create_syslog_handler():
-    from logging.handlers import SysLogHandler
-    from logging import Formatter
-
-    h = SysLogHandler(address='/dev/log')
-    f = Formatter('%(name)s: %(message)s')
+    h = logging.handlers.SysLogHandler(address='/dev/log')
+    f = logging.Formatter('%(name)s: %(message)s')
     h.setFormatter(f)
 
     return h
@@ -303,7 +300,6 @@ def get_logger(suffix=None, *, prefix='REST', full_name=None):
     else:
         name = prefix + '/' + suffix
 
-    import logging
     log = logging.getLogger(name)
 
     if not log.handlers:

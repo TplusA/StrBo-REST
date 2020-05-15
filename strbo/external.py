@@ -21,6 +21,7 @@
 
 from pathlib import Path
 import os
+import subprocess
 
 
 class Tools:
@@ -72,7 +73,6 @@ class Tools:
     @staticmethod
     def invoke(timeout, tool_id, *args):
         """Convenience method for running an external tool with parameters."""
-        import subprocess
         cmd = subprocess.Popen([Tools.get(tool_id)] + [str(a) for a in args])
         return cmd.wait(timeout)
 
@@ -80,7 +80,6 @@ class Tools:
     def invoke_cwd(cwd, timeout, tool_id, *args):
         """Convenience method for running an external tool with parameters in
         a given working directory."""
-        import subprocess
         cmd = subprocess.Popen([Tools.get(tool_id)] + [str(a) for a in args],
                                cwd=str(cwd))
         return cmd.wait(timeout)
@@ -98,7 +97,6 @@ class _Helper:
                         format(self._script_name,
                                ' '.join([str(a) for a in args])))
 
-        import subprocess
         cmd = subprocess.Popen(
             ['/usr/bin/sudo', str(self._script_name)] + [str(a) for a in args],
             cwd=self._cwd)

@@ -22,9 +22,10 @@
 
 from threading import RLock
 from werkzeug.wrappers import Response
+from json import loads
 import halogen
 
-from .endpoint import Endpoint
+from .endpoint import Endpoint, register_endpoints
 from .utils import jsonify_e, jsonify_simple, if_none_match
 from .utils import get_logger
 import strbo.dbus
@@ -1036,7 +1037,6 @@ def _mk_service_config(config):
 
 
 def _fill_in_data_from_dcpd(all_nics, network_configuration):
-    from json import loads
     config = loads(network_configuration)
 
     nics = config.get('nics', None)
@@ -1216,5 +1216,4 @@ all_endpoints = [
 
 def add_endpoints():
     """Register all endpoints defined in this module."""
-    from .endpoint import register_endpoints
     register_endpoints(all_endpoints)

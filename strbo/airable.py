@@ -22,9 +22,10 @@
 
 from threading import RLock
 from werkzeug.wrappers import Response
+from zlib import adler32
 import halogen
 
-from .endpoint import Endpoint
+from .endpoint import Endpoint, EmptyError, register_endpoints
 from .utils import jsonify_e, jsonify_nc, jsonify_simple
 from .utils import if_none_match
 from .utils import get_logger
@@ -266,7 +267,6 @@ class ServiceInfo(Endpoint):
             service = self.services.get_service_by_id(kwargs['service_id'])
 
             if service is None:
-                from .endpoint import EmptyError
                 raise EmptyError(self)
 
             return jsonify_simple({self.id: ServiceSchema.serialize(service)})
@@ -419,8 +419,6 @@ class Services(Endpoint):
 
     @staticmethod
     def _compute_etag(services):
-        from zlib import adler32
-
         i = 0
         etag = 1
 
@@ -713,7 +711,6 @@ def signal__external_service_login_status(service_id, actor_id, log_in,
 def add_endpoints():
     """Register all endpoints defined in this module, start listening to
     relevant D-Bus signals."""
-    from .endpoint import register_endpoints
     register_endpoints(all_endpoints)
 
     strbo.dbus.Interfaces.airable().connect_to_signal(
