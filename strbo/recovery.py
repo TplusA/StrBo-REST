@@ -109,7 +109,7 @@ def _log_unmount_attempt(mountpoint, result):
                      .format(mountpoint))
 
 
-def _get_info_and_verify(mountpoint, **values):
+def _get_info_and_verify_data(mountpoint, **values):
     p = mountpoint / 'images'
     mount_result = try_mount_partition(mountpoint)
     _log_mount_attempt(mountpoint, mount_result)
@@ -168,12 +168,12 @@ def _get_info_and_verify(mountpoint, **values):
                           'state': overall_valid_state}
 
 
-def _verify_wrapper(**values):
+def _verify_data_wrapper(**values):
     log.info('Start verification of recovery data')
     mountpoint = Path('/src')
 
     try:
-        version_info, status = _get_info_and_verify(mountpoint, **values)
+        version_info, status = _get_info_and_verify_data(mountpoint, **values)
     except:  # noqa: E722
         unmount_result = try_unmount_partition(mountpoint)
         _log_unmount_attempt(mountpoint, unmount_result)
@@ -187,8 +187,8 @@ def _verify_wrapper(**values):
     return version_info, status
 
 
-class StatusSchema(halogen.Schema):
-    """Representation of :class:`Status`."""
+class DStatusSchema(halogen.Schema):
+    """Representation of :class:`DStatus`."""
 
     #: Link to self.
     self = halogen.Link(attr='href')
@@ -202,20 +202,20 @@ class StatusSchema(halogen.Schema):
     status = halogen.Attr()
 
 
-class Status(Endpoint):
-    """**API Endpoint** - Read out status of the recovery system data.
+class DStatus(Endpoint):
+    """**API Endpoint** - Read out status of the recovery data.
 
-    +-------------+---------------------------------------------------------+
-    | HTTP method | Description                                             |
-    +=============+=========================================================+
-    | ``GET``     | Retrieve the status of the recovery system data as of   |
-    |             | last verification. See :class:`StatusSchema`; see also  |
-    |             | :class:`Verify` for information on verification.        |
-    +-------------+---------------------------------------------------------+
+    +-------------+-----------------------------------------------------+
+    | HTTP method | Description                                         |
+    +=============+=====================================================+
+    | ``GET``     | Retrieve the status of the recovery data as of last |
+    |             | verification. See :class:`DStatusSchema`; see also  |
+    |             | :class:`DVerify` for information on verification.   |
+    +-------------+-----------------------------------------------------+
     """
 
     #: Path to endpoint.
-    href = '/recovery/status'
+    href = '/recovery/data/status'
 
     #: Supported HTTP methods.
     methods = ('GET',)
@@ -229,8 +229,8 @@ class Status(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(self, 'recovery_data_info', name='data_info',
-                          title='Status of the recovery system data')
-        self.etag = Status._compute_etag(self.version_info, self.status)
+                          title='Status of the recovery data')
+        self.etag = DStatus._compute_etag(self.version_info, self.status)
 
     def __call__(self, request, **values):
         with self.lock:
@@ -239,18 +239,18 @@ class Status(Endpoint):
                 return cached
 
             return jsonify_e(request, self.get_etag(), 5,
-                             StatusSchema.serialize(self))
+                             DStatusSchema.serialize(self))
 
     def _set(self, version_info, status):
-        """Set status data. Called from :class:`Verify`."""
+        """Set status data. Called from :class:`DVerify`."""
         with self.lock:
             self.version_info = version_info
             self.status = status
             self.timestamp = time()
-            self.etag = Status._compute_etag(self.version_info, self.status)
+            self.etag = DStatus._compute_etag(self.version_info, self.status)
 
     def get_age(self):
-        """Determine the age of recovery system data status in seconds."""
+        """Determine the age of recovery data status in seconds."""
         return time() - self.timestamp if self.timestamp else None
 
     def get_etag(self):
@@ -263,8 +263,8 @@ class Status(Endpoint):
         return "{:08x}".format(adler32(bytes(temp, 'UTF-8')))
 
 
-class VerifySchema(halogen.Schema):
-    """Representation of :class:`Verify`."""
+class DVerifySchema(halogen.Schema):
+    """Representation of :class:`DVerify`."""
 
     #: Link to self.
     self = halogen.Link(attr='href')
@@ -273,14 +273,14 @@ class VerifySchema(halogen.Schema):
     state = halogen.Attr(attr=lambda value: value._get_state_string())
 
 
-class Verify(Endpoint):
-    """**API Endpoint** - Verify the recovery system data.
+class DVerify(Endpoint):
+    """**API Endpoint** - Verify the recovery data.
 
     +-------------+--------------------------------------------------+
     | HTTP method | Description                                      |
     +=============+==================================================+
     | ``GET``     | Retrieve status of verification process, if any. |
-    |             | See :class:`VerifySchema`.                       |
+    |             | See :class:`DVerifySchema`.                      |
     +-------------+--------------------------------------------------+
     | ``POST``    | Start verification process.                      |
     +-------------+--------------------------------------------------+
@@ -294,7 +294,7 @@ class Verify(Endpoint):
         verification has finished, which may time quite some time (several
         seconds). When done, the response contains the verification status
         object which can also be retrieved with ``GET`` (see also
-        :class:`VerifySchema`). This saves clients to set off another ``GET``
+        :class:`DVerifySchema`). This saves clients to set off another ``GET``
         request after verification and provides safe synchronization with end
         of verification.
 
@@ -313,11 +313,11 @@ class Verify(Endpoint):
         application state will be disrupted. You have been warned.
 
     A detailed status summery of the last verification can be retrieved from
-    endpoint :class:`Status`.
+    endpoint :class:`DStatus`.
     """
 
     #: Path to endpoint.
-    href = '/recovery/verify'
+    href = '/recovery/data/verify'
 
     #: Supported HTTP methods.
     methods = ('GET', 'POST')
@@ -326,7 +326,7 @@ class Verify(Endpoint):
 
     def __init__(self, status):
         Endpoint.__init__(self, 'recovery_data_verify', name='verify_data',
-                          title='Verification of recovery system data')
+                          title='Verification of recovery data')
         self.status = status
         self.processing = False
         self.failed = False
@@ -339,7 +339,7 @@ class Verify(Endpoint):
                     result = cached
                 else:
                     result = jsonify_e(request, self.get_etag(), 5,
-                                       VerifySchema.serialize(self))
+                                       DVerifySchema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
@@ -357,7 +357,7 @@ class Verify(Endpoint):
         # this section is protected by self.processing
         try:
             failed = False
-            inf, st = _verify_wrapper(**values)
+            inf, st = _verify_data_wrapper(**values)
         except Exception:
             failed = True
             inf = None
@@ -368,7 +368,7 @@ class Verify(Endpoint):
             self.processing = False
             self.failed = failed
             return jsonify_e(request, self.get_etag(), 15,
-                             VerifySchema.serialize(self))
+                             DVerifySchema.serialize(self))
 
     def _rate_limit(self):
         if self.status:
@@ -540,8 +540,8 @@ def _replace_recovery_system_data(request, status):
         raise
 
 
-class ReplaceSchema(halogen.Schema):
-    """Representation of :class:`Replace`."""
+class DReplaceSchema(halogen.Schema):
+    """Representation of :class:`DReplace`."""
 
     #: Link to self.
     self = halogen.Link(attr='href')
@@ -564,14 +564,14 @@ class ReplaceSchema(halogen.Schema):
     )
 
 
-class Replace(Endpoint):
-    """**API Endpoint** - Replace the recovery system data.
+class DReplace(Endpoint):
+    """**API Endpoint** - Replace the recovery data.
 
     +-------------+------------------------------------------------------+
     | HTTP method | Description                                          |
     +=============+======================================================+
     | ``GET``     | Retrieve status of data replacement process, if any. |
-    |             | See :class:`ReplaceSchema`.                          |
+    |             | See :class:`DReplaceSchema`.                         |
     +-------------+------------------------------------------------------+
     | ``POST``    | Send recovery data as a substitute for the data      |
     |             | currently stored on flash memory.                    |
@@ -611,12 +611,12 @@ class Replace(Endpoint):
 
         When done, the response contains the data replacement process status
         object which can also be retrieved with ``GET`` (see also
-        :class:`ReplaceSchema`). This saves clients to set off another ``GET``
+        :class:`DReplaceSchema`). This saves clients to set off another ``GET``
         request after recovery data replacement and provides safe
         synchronization with end of replacement.
 
         It is a *very* good idea to verify the recovery data after the data
-        have been replaced (see :class:`Verify`). Even though there is only a
+        have been replaced (see :class:`DVerify`). Even though there is only a
         very small chance of verification failures after successful replacement
         of recovery data, but in this particular case it is much better to be
         safe than sorry.
@@ -629,7 +629,7 @@ class Replace(Endpoint):
     """
 
     #: Path to endpoint.
-    href = '/recovery/replace'
+    href = '/recovery/data/replace'
 
     #: Supported HTTP methods.
     methods = ('GET', 'POST')
@@ -638,13 +638,13 @@ class Replace(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(self, 'recovery_data_replace', name='replace_data',
-                          title='Replace recovery system data')
+                          title='Replace recovery data')
         self._reset()
 
     def __call__(self, request, **values):
         with self.lock:
             if request.method == 'GET':
-                result = jsonify_nc(request, ReplaceSchema.serialize(self))
+                result = jsonify_nc(request, DReplaceSchema.serialize(self))
             elif self.processing:
                 result = Response(status=303)
                 result.location = url_for(request, self)
@@ -693,8 +693,10 @@ class Replace(Endpoint):
         return self.url if self.processing else None
 
 
-status_endpoint = Status()
-all_endpoints = [status_endpoint, Verify(status_endpoint), Replace()]
+data_status_endpoint = DStatus()
+all_endpoints = [
+    data_status_endpoint, DVerify(data_status_endpoint), DReplace(),
+]
 
 
 def add_endpoints():
