@@ -20,7 +20,13 @@ import os
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.join(os.path.dirname(__name__), '..'))
-sys.path.append(os.path.abspath('/home/rt/source/linux_system/strbo_system/strbo_build_main/tmp-glibc/work/raspberrypi-oe-linux-gnueabi/strbo-main-image/1.0-r1/sdk/image/usr/local/oecore-x86_64/sysroots/arm1176jzfshf-vfp-oe-linux-gnueabi/usr/lib/python3.4/site-packages'))
+
+with open('conf.local', 'r') as f:
+    for line in f.readlines():
+        line = line.strip()
+        k, v = line.split('=', 1)
+        if k == 'PATH':
+            sys.path.append(os.path.abspath(v))
 
 # -- General configuration ------------------------------------------------
 
