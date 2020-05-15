@@ -125,8 +125,8 @@ def _get_info_and_verify(mountpoint, **values):
         if temp.exists() and temp.is_file():
             with temp.open() as f:
                 checksums = {}
-                for l in f:
-                    checksum, filename = re.split(r' +', l.strip())
+                for line in f:
+                    checksum, filename = re.split(r' +', line.strip())
                     checksums[filename] = checksum
         else:
             log.error('Required file {} not found'.format(temp))
