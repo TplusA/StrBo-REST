@@ -506,10 +506,10 @@ def _replace_recovery_system_data(request, status):
             log.warning('Recovery data locked, cannot replace')
             result = jsonify_nc(request, result='error', reason='locked')
         elif mount_result is MountResult.FAILED:
-            log.critical('Recovery data unaccessible in file system')
+            log.critical('Recovery data unaccessible in file system (failure)')
             result = jsonify_nc(request, result='error', reason='inaccessible')
         elif mount_result is MountResult.TIMEOUT:
-            log.critical('Recovery data unaccessible in file system')
+            log.critical('Recovery data unaccessible in file system (timeout)')
             result = jsonify_nc(request,
                                 result='error', reason='mount timeout')
         else:
@@ -623,9 +623,9 @@ class DReplace(Endpoint):
         synchronization with end of replacement.
 
         It is a *very* good idea to verify the recovery data after the data
-        have been replaced (see :class:`DVerify`). Even though there is only a
-        very small chance of verification failures after successful replacement
-        of recovery data, but in this particular case it is much better to be
+        have been replaced (see :class:`DVerify`). There is only a very small
+        chance of verification failures after successful replacement of
+        recovery data, but in this particular case it is much better to be
         safe than sorry.
 
         Clients should always wait for a response before sending another
