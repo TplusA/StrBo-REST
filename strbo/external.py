@@ -39,6 +39,7 @@ class Tools:
         'test':         '/bin/test',
         'rm':           '/bin/rm',
         'readlink':     '/usr/bin/readlink',
+        'dd':           '/bin/dd',
 
         # package: util-linux-mountpoint
         'mountpoint':   '/bin/mountpoint',
