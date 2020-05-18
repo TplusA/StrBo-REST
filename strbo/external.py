@@ -122,6 +122,8 @@ class Directories:
     _external_directories = {
         'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
         'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
+        'recovery_system_workdir':
+            Path('/var/local/data/recovery_system_update'),
     }
 
     @staticmethod
@@ -255,3 +257,5 @@ def register_helpers(path):
     Helpers.register('mountpoint_unmount', ('umount', 'test'), timeout=20)
     Helpers.register('replace_recovery_data',
                      ('rm', 'tar', 'readlink', 'test'), timeout=300)
+    Helpers.register('replace_recovery_system',
+                     ('mount', 'umount', 'test', 'dd'), timeout=300)

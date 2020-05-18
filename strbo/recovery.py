@@ -30,12 +30,14 @@ from urllib.request import urlopen
 from zlib import adler32
 import halogen
 import re
+import shlex
 
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Tools, Files, Directories, Helpers
 from .utils import jsonify_e, jsonify_nc, if_none_match
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
+from .utils import is_mountpoint
 from .utils import remove_directory
 from .utils import get_logger
 log = get_logger()
@@ -116,6 +118,56 @@ def _log_unmount_attempt(mountpoint, result):
                      .format(mountpoint))
 
 
+def _parse_old_version_txt(f):
+    """Parse old version.txt file associated with partition images.
+
+    The old format is a simple ASCII file containing just three lines where
+    each line has a fixed meaning. It has been replaced by a strbo-release file
+    in line V2.
+    """
+    version_file = f.readlines()
+
+    if not version_file:
+        return None
+
+    try:
+        return {
+            'number': version_file[0].strip(),
+            'timestamp': version_file[1].strip(),
+            'commit_id': version_file[2].strip(),
+        }
+    except KeyError:
+        return None
+
+
+_strbo_to_version_info_key = {
+    'STRBO_VERSION': 'number',
+    'STRBO_RELEASE_LINE': 'release_line',
+    'STRBO_FLAVOR': 'flavor',
+    'STRBO_DATETIME': 'timestamp',
+    'STRBO_GIT_COMMIT': 'commit_id',
+}
+
+
+def _parse_strbo_release_file(f):
+    """Parse strbo-release file associated with the partition images.
+
+    This file contains shell-style key/value assignments.
+    """
+    version_file = f.read()
+    if not version_file:
+        return None
+
+    version_info = {}
+
+    for line in shlex.split(version_file):
+        key, value = line.split('=', 1)
+        if key:
+            version_info[_strbo_to_version_info_key.get(key, key)] = value
+
+    return version_info
+
+
 def _get_info_and_verify_data(mountpoint, **values):
     p = mountpoint / 'images'
     mount_result = try_mount_partition(mountpoint)
@@ -139,35 +191,57 @@ def _get_info_and_verify_data(mountpoint, **values):
             log.error('Required file {} not found'.format(temp))
 
         log.debug('Reading version file')
-        temp = p / 'version.txt'
-        version_file = None
-        if temp.exists() and temp.is_file():
-            with temp.open() as f:
-                version_file = f.readlines()
-        else:
-            log.error('Required file {} not found'.format(temp))
 
-        if version_file and len(version_file) == 3:
-            version_info = {
-                'number': version_file[0].strip(),
-                'timestamp': version_file[1].strip(),
-                'commit_id': version_file[2].strip(),
-            }
+        def read_version(fname, is_kv_file):
+            if not fname.exists():
+                return None, None
 
-            log.info('Recovery data version {} as of {}, commit {}'
-                     .format(version_info['number'], version_info['timestamp'],
-                             version_info['commit_id']))
-        else:
-            log.error('No version information for recovery data')
+            if not fname.is_file():
+                return None, None
 
+            with fname.open() as f:
+                if is_kv_file:
+                    version_info = _parse_strbo_release_file(f)
+                else:
+                    version_info = _parse_old_version_txt(f)
+
+            try:
+                log.info('Recovery data version {} as of {}, commit {}'
+                         .format(version_info['number'],
+                                 version_info['timestamp'],
+                                 version_info['commit_id']))
+            except KeyError as e:
+                log.error('Version information not recognized: missing key {}'
+                          .format(e))
+                version_info = None
+
+            return fname, version_info
+
+        strbo_release = p / 'strbo-release'
+        version_txt = p / 'version.txt'
         fileset = []
-        fileset.append(_generate_file_info(temp, checksums))
+
+        vfile, version_info = read_version(strbo_release, True)
+        if version_info is None:
+            if vfile:
+                fileset.append(_generate_file_info(vfile, checksums))
+
+            vfile, version_info = read_version(version_txt, False)
+            if version_info is None:
+                if vfile:
+                    fileset.append(_generate_file_info(vfile, checksums))
+
+        if version_info is None:
+            log.error('No version information for recovery data')
+        else:
+            fileset.append(_generate_file_info(vfile, checksums))
 
         for temp in sorted(p.glob('*.bin')):
             fileset.append(_generate_file_info(temp, checksums))
 
         overall_valid_state = \
-            'valid' if all([fs['is_valid'] for fs in fileset]) else 'broken'
+            'valid' if all([fs['is_valid'] for fs in fileset]) \
+            and version_info is not None else 'broken'
     else:
         overall_valid_state = 'unavailable'
 
@@ -700,9 +774,554 @@ class DReplace(Endpoint):
         return self.url if self.processing else None
 
 
+# just a few, not all of them
+_required_boot_files = (
+    'bootcode.bin', 'config.txt', 'fixup_cd.dat', 'start_cd.elf',
+)
+
+
+def _get_info_and_verify_system(p, **values):
+    version_info = None
+    fileset = None
+
+    if p.is_dir() and is_mountpoint(str(p)) == MountResult.ALREADY_MOUNTED:
+        log.debug('Reading version file')
+        temp = p / 'strbo-release'
+        if temp.exists() and temp.is_file():
+            with temp.open() as f:
+                version_info = _parse_strbo_release_file(f)
+        else:
+            log.info('Version file {} not found'.format(temp))
+            version_info = None
+
+        log.debug('Computing checksums')
+
+        fileset = []
+        missing_important = set(_required_boot_files)
+
+        for file in [f for f in p.glob('**/*') if f.is_file()]:
+            cs = _compute_file_checksum(file)
+            relname = str(file.relative_to(p))
+            fileset.append({
+                'name': relname,
+                'computed_checksum': cs,
+            })
+            missing_important.discard(relname)
+
+        if not missing_important:
+            overall_valid_state = 'valid'
+        else:
+            log.error('Missing files: {}'.format(', '.join(missing_important)))
+            overall_valid_state = 'broken'
+
+    else:
+        overall_valid_state = 'unavailable'
+
+    return version_info, {'boot_files': fileset,
+                          'state': overall_valid_state}
+
+
+def _verify_system_wrapper(**values):
+    log.info('Start verification of recovery system')
+    p = Path('/bootpartr')
+
+    try:
+        version_info, status = _get_info_and_verify_system(p, **values)
+    except:  # noqa: E722
+        log.error('Verification of recovery system failed')
+        raise
+
+    log.info('Verification of recovery system done: {}'
+             .format(status['state']))
+
+    return version_info, status
+
+
+class SStatusSchema(halogen.Schema):
+    """Representation of :class:`SStatus`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Version information about recovery system stored on Streaming Board
+    #: flash memory.
+    version_info = halogen.Attr()
+
+    #: Result of last check/current status. Will be ``null`` until
+    #: verification of stored data has been triggered.
+    status = halogen.Attr()
+
+
+class SStatus(Endpoint):
+    """**API Endpoint** - Read out status of the recovery system.
+
+    +-------------+-------------------------------------------------------+
+    | HTTP method | Description                                           |
+    +=============+=======================================================+
+    | ``GET``     | Retrieve the status of the recovery system as of last |
+    |             | verification. See :class:`SStatusSchema`; see also    |
+    |             | :class:`SVerify` for information on verification.     |
+    +-------------+-------------------------------------------------------+
+    """
+
+    #: Path to endpoint.
+    href = '/recovery/system/status'
+
+    #: Supported HTTP methods.
+    methods = ('GET',)
+
+    lock = RLock()
+
+    version_info = None
+    status = None
+    timestamp = None
+    etag = None
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_info', name='system_info',
+                          title='Status of the recovery system')
+        self.etag = SStatus._compute_etag(self.version_info, self.status)
+
+    def __call__(self, request, **values):
+        with self.lock:
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
+
+            return jsonify_e(request, self.get_etag(), 5,
+                             SStatusSchema.serialize(self))
+
+    def _set(self, version_info, status):
+        """Set status data. Called from :class:`SVerify`."""
+        with self.lock:
+            self.version_info = version_info
+            self.status = status
+            self.timestamp = time()
+            self.etag = SStatus._compute_etag(self.version_info, self.status)
+
+    def get_age(self):
+        """Determine the age of recovery system status in seconds."""
+        return time() - self.timestamp if self.timestamp else None
+
+    def get_etag(self):
+        with self.lock:
+            return self.etag
+
+    @staticmethod
+    def _compute_etag(version_info, status):
+        temp = 'VERSION|' + str(version_info) + '|STATUS|' + str(status)
+        return "{:08x}".format(adler32(bytes(temp, 'UTF-8')))
+
+
+class SVerifySchema(halogen.Schema):
+    """Representation of :class:`SVerify`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: State, either ``idle``, ``verifying``, or ``failed``.
+    state = halogen.Attr(attr=lambda value: value._get_state_string())
+
+
+class SVerify(Endpoint):
+    """**API Endpoint** - Verify the recovery system.
+
+    +-------------+--------------------------------------------------+
+    | HTTP method | Description                                      |
+    +=============+==================================================+
+    | ``GET``     | Retrieve status of verification process, if any. |
+    |             | See :class:`SVerifySchema`.                      |
+    +-------------+--------------------------------------------------+
+    | ``POST``    | Start verification process.                      |
+    +-------------+--------------------------------------------------+
+
+    Details on method ``POST``:
+        Any data sent with the request is ignored. For the time being, clients
+        should not send any data with the request.
+
+        If no verification is in progress when a ``POST`` request is sent, then
+        the request will start verification. The response is sent after
+        verification has finished, which may time quite some time (several
+        seconds). When done, the response contains the verification status
+        object which can also be retrieved with ``GET`` (see also
+        :class:`SVerifySchema`). This saves clients to set off another ``GET``
+        request after verification and provides safe synchronization with end
+        of verification.
+
+        If there is a verification is in progress, then the response will be an
+        immediate redirect to this endpoint with an HTTP status code 303.
+
+        There is a rate limit of one verification request per three seconds.
+        That is, in case no verification is in progress, but the last
+        verification has finished no longer than three seconds ago, the
+        response will follow immediately with HTTP status code 429.
+
+        Either way, clients should always wait for a response before sending
+        another ``POST`` request. Impatiently aborting "long" requests and
+        trying to restart them will not be of any help with progress, plus
+        things will become much more complicated on client side as its
+        application state will be disrupted. You have been warned.
+
+    A detailed status summery of the last verification can be retrieved from
+    endpoint :class:`SStatus`.
+    """
+
+    #: Path to endpoint.
+    href = '/recovery/system/verify'
+
+    #: Supported HTTP methods.
+    methods = ('GET', 'POST')
+
+    lock = RLock()
+
+    def __init__(self, status):
+        Endpoint.__init__(self, 'recovery_system_verify', name='verify_system',
+                          title='Verification of recovery system')
+        self.status = status
+        self.processing = False
+        self.failed = False
+
+    def __call__(self, request, **values):
+        with self.lock:
+            if request.method == 'GET':
+                cached = if_none_match(request, self.get_etag())
+                if cached:
+                    result = cached
+                else:
+                    result = jsonify_e(request, self.get_etag(), 5,
+                                       SVerifySchema.serialize(self))
+            elif self.processing:
+                result = Response(status=303)
+                result.location = url_for(request, self)
+            elif self._rate_limit():
+                result = Response(status=429)
+            else:
+                result = None
+
+            if result:
+                return result
+
+            self.processing = True
+            self.failed = False
+
+        # this section is protected by self.processing
+        try:
+            failed = False
+            inf, st = _verify_system_wrapper(**values)
+        except Exception:
+            failed = True
+            inf = None
+            st = None
+
+        with self.lock:
+            self.status._set(inf, st)
+            self.processing = False
+            self.failed = failed
+            return jsonify_e(request, self.get_etag(), 15,
+                             SVerifySchema.serialize(self))
+
+    def _rate_limit(self):
+        if self.status:
+            age = self.status.get_age()
+
+            if age and age < 3:
+                return True
+
+        return False
+
+    def _get_state_string(self):
+        if self.processing:
+            return 'verifying'
+        elif self.failed:
+            return 'failed'
+        else:
+            return 'idle'
+
+    def get_etag(self):
+        with self.lock:
+            return self._get_state_string()
+
+
+def _replace_recovery_system(request, status):
+    log.info('Start replacing recovery system')
+    url_from_form = request.values.get('dataurl', None)
+
+    if url_from_form:
+        log.info('Downloading recovery system from {}'.format(url_from_form))
+        status.set_retrieving(url_from_form)
+        file_from_form = None
+    else:
+        log.info('Taking recovery system from HTTP stream')
+        status.set_retrieving()
+        file_from_form = _get_data_file_from_form(request)
+
+    workdir = _create_workdir('recovery_system_workdir')
+    gpgfile = workdir / 'recoverysystem.gpg'
+    payload = workdir / 'flash_recovery_system.sh'
+    is_mounted = True
+
+    try:
+        if url_from_form:
+            url = urlopen(url_from_form)
+            f = FileStorage(url, gpgfile.name)
+            f.save(str(gpgfile))
+        elif file_from_form:
+            file_from_form.save(str(gpgfile))
+        else:
+            log.error('No recovery system file specified')
+            raise Exception('No recovery system file specified')
+
+        log.info('Verifying recovery system signature')
+        status.set_step_name('verifying signature')
+
+        gpghome = Directories.get('gpg_home')
+        gpghome.mkdir(mode=0o700, exist_ok=True)
+
+        if Tools.invoke_cwd(gpgfile.parent, 15,
+                            'gpg', '--homedir', gpghome,
+                            '--import', Files.get('gpg_key')) != 0:
+            log.error('Failed to import GPG public key')
+            return jsonify_nc(request,
+                              result='error', reason='no public key')
+
+        if Tools.invoke_cwd(gpgfile.parent, 600,
+                            'gpg', '--homedir', gpghome,
+                            '--output', payload, gpgfile) != 0:
+            log.error('Invalid signature, rejecting downloaded '
+                      'recovery system')
+            return jsonify_nc(request,
+                              result='error', reason='invalid signature')
+
+        status.set_step_name('flashing and verifying')
+        payload.chmod(0o700)
+        mountpoint = Path('/bootpartr')
+        unmount_result = try_unmount_partition(mountpoint)
+        _log_unmount_attempt(mountpoint, unmount_result)
+
+        succeeded = False
+
+        if unmount_result is UnmountResult.UNMOUNTED or \
+                unmount_result is UnmountResult.NOT_MOUNTED:
+            is_mounted = False
+
+            log.warning('POINT OF NO RETURN: '
+                        'Overwriting recovery boot partition')
+            log.info('Executing recovery system installer')
+
+            if Helpers.invoke('replace_recovery_system', workdir) != 0:
+                log.critical('Error while replacing recovery system')
+                result = jsonify_nc(request,
+                                    result='error', reason='write error')
+            else:
+                succeeded = True
+                result = jsonify_nc(request,
+                                    result='success', reason='super hero')
+        elif unmount_result is UnmountResult.FAILED:
+            log.critical('Recovery system partition unaccessible '
+                         'in file system (failure)')
+            result = jsonify_nc(request, result='error', reason='inaccessible')
+        elif unmount_result is UnmountResult.TIMEOUT:
+            log.critical('Recovery system partition unaccessible '
+                         'in file system (timeout)')
+            result = jsonify_nc(request,
+                                result='error', reason='mount timeout')
+        else:
+            log.critical('Cannot replace recovery system due to some unknown '
+                         'error while unmounting')
+            result = jsonify_nc(request, result='error', reason='unknown')
+
+        if succeeded:
+            log.info('Cleaning up to make new recovery system usable')
+        else:
+            log.info('Cleaning up')
+
+        status.set_step_name('finalizing')
+        mount_result = try_mount_partition(mountpoint, False)
+        _log_mount_attempt(mountpoint, mount_result)
+        is_mounted = True
+
+        remove_directory(workdir)
+
+        if succeeded:
+            log.info('Recovery system replaced successfully')
+        else:
+            log.error('Replacing recovery system FAILED')
+
+        return result
+    except Exception as e:
+        log.error('Replacing recovery system FAILED: {}'.format(e))
+
+        if not is_mounted:
+            mount_result = try_mount_partition(mountpoint, False)
+            _log_mount_attempt(mountpoint, mount_result)
+
+        remove_directory(workdir)
+
+        raise
+
+
+class SReplaceSchema(halogen.Schema):
+    """Representation of :class:`SReplace`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Short string describing the currently running step in the
+    #: replacement process. Possible values are  ``idle``,
+    #: ``receiving request``, ``retrieving``, ``downloading``,
+    #: ``verifying signature``, ``executing installer``, and
+    #: ``finalizing``. These strings are suitable for display of progress
+    #: in a user interface.
+    state = halogen.Attr(attr=lambda value: value._get_state_string())
+
+    #: Where the recovery system is coming from, either a URL or ``null``
+    #: (i.e., recovery system package was sent as request form data). The field
+    #: will be missing in case no replacement process in active.
+    origin = halogen.Attr(
+        attr=lambda value: value._get_data_origin()
+        if value.processing else value.does_not_exist(),
+        required=False
+    )
+
+
+class SReplace(Endpoint):
+    """**API Endpoint** - Replace the recovery system.
+
+    +-------------+--------------------------------------------------------+
+    | HTTP method | Description                                            |
+    +=============+========================================================+
+    | ``GET``     | Retrieve status of system replacement process, if any. |
+    |             | See :class:`SReplaceSchema`.                           |
+    +-------------+--------------------------------------------------------+
+    | ``POST``    | Send recovery system package as a substitute for the   |
+    |             | system currently stored on flash memory.               |
+    +-------------+--------------------------------------------------------+
+
+    Details on method ``GET``:
+        The recovery system replacement process does not emit any events to the
+        event monitor. Thus, polling this endpoint is an acceptable way for
+        monitoring the state of the replacement process. The poll interval
+        should not exceed 2 seconds.
+
+    Details on method ``POST``:
+        There are two ways for uploading a recovery system package to the
+        system: either by sending a download URL, or by sending the package
+        data directly as form data. If a download URL is sent, then this URL
+        must point to a location from which the Streaming Board can pull a
+        *recovery system archive*. If sent as form data, then the data pushed
+        to the Streaming Board must be the *recovery system archive* itself.
+
+        A download URL is passed in as parameter ``dataurl``. It shall contain
+        a valid URL of a recovery system archive. A request of this kind is
+        small and sent quickly. In this case, the Streaming Board is
+        responsible for retrieving the archive.
+
+        Alternatively, direct recovery system archive upload can be done
+        through parameter ``datafile``. A request of this kind will take a long
+        time to be sent off completely because the archive files are pretty
+        big. While the request is in progress of being sent, no meaningful
+        update of the recovery system replacement process is going to take
+        place.
+
+        If both, ``dataurl`` and ``datafile``, are present, then the former is
+        preferred and the latter gets ignored. The content type must be
+        ``multipart/form-data`` in any case.
+
+        If there is a recovery system replacement is in progress, then the
+        response will be an immediate redirect to this endpoint with an HTTP
+        status code 303.
+
+        When done, the response contains the recovery system replacement
+        process status object which can also be retrieved with ``GET`` (see
+        also :class:`SReplaceSchema`). This saves clients to set off another
+        ``GET`` request after recovery system replacement and provides safe
+        synchronization with end of replacement.
+
+        It is a *very* good idea to verify the recovery system after the system
+        has been replaced (see :class:`DVerify`). There is only a very small
+        chance of verification failure after successful replacement of the
+        recovery system, but in this particular case it is much better to be
+        safe than sorry.
+
+        Clients should always wait for a response before sending another
+        ``POST`` request. Impatiently aborting "long" requests and trying to
+        restart them will not be of any help with progress, plus things will
+        become much more complicated on client side as its application state
+        will be disrupted. You have been warned.
+    """
+
+    #: Path to endpoint.
+    href = '/recovery/system/replace'
+
+    #: Supported HTTP methods.
+    methods = ('GET', 'POST')
+
+    lock = RLock()
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_replace',
+                          name='replace_system',
+                          title='Replace recovery system')
+        self._reset()
+
+    def __call__(self, request, **values):
+        with self.lock:
+            if request.method == 'GET':
+                result = jsonify_nc(request, SReplaceSchema.serialize(self))
+            elif self.processing:
+                result = Response(status=303)
+                result.location = url_for(request, self)
+            else:
+                result = None
+
+            if result:
+                return result
+
+            self.processing = True
+            self.step = 'receiving request'
+            self.url = '<unknown>'
+
+        # this section is protected by self.processing
+        try:
+            result = _replace_recovery_system(request, self)
+            self._reset()
+            return result
+        except:  # noqa: E722
+            self._reset()
+            raise
+
+    def _reset(self):
+        with self.lock:
+            self.processing = False
+            self.step = None
+            self.url = None
+
+    def set_retrieving(self, url=None):
+        """Set progress step: retrieving form data or downloading."""
+        with self.lock:
+            if self.processing:
+                self.step = 'downloading' if url else 'retrieving'
+                self.url = url if url else '<form data>'
+
+    def set_step_name(self, name):
+        """Set progress step: any short string describing the step."""
+        with self.lock:
+            if self.processing:
+                self.step = name
+
+    def _get_state_string(self):
+        return self.step if self.processing else 'idle'
+
+    def _get_data_origin(self):
+        return self.url if self.processing else None
+
+
 data_status_endpoint = DStatus()
+system_status_endpoint = SStatus()
+
 all_endpoints = [
     data_status_endpoint, DVerify(data_status_endpoint), DReplace(),
+    system_status_endpoint, SVerify(system_status_endpoint), SReplace(),
 ]
 
 
