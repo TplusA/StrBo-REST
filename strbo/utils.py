@@ -45,6 +45,20 @@ class UnmountResult(Enum):
     TIMEOUT = 4
 
 
+def is_mountpoint(mountpoint):
+    """Check if something is mounted to the given directory.
+
+    :return: A result of type :class:`MountResult`.
+    """
+    try:
+        if Tools.invoke(2, 'mountpoint', '-q', mountpoint) == 0:
+            return MountResult.ALREADY_MOUNTED
+    except TimeoutError:
+        return MountResult.TIMEOUT
+
+    return MountResult.FAILED
+
+
 def try_mount_partition(mountpoint, writable=False):
     """Try to mount a partition using an ``/etc/fstab`` entry.
 
