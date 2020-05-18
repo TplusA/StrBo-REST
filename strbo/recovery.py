@@ -401,8 +401,8 @@ def _get_data_file_from_form(request):
     return f
 
 
-def _create_workdir():
-    workdir = Directories.get('recovery_workdir')
+def _create_workdir(dir_id):
+    workdir = Directories.get(dir_id)
 
     try:
         remove_directory(workdir, False)
@@ -430,7 +430,7 @@ def _replace_recovery_system_data(request, status):
         status.set_retrieving()
         file_from_form = _get_data_file_from_form(request)
 
-    workdir = _create_workdir()
+    workdir = _create_workdir('recovery_data_workdir')
     gpgfile = workdir / 'recoverydata.gpg'
     payload = workdir / 'recoverydata'
     is_mounted = False

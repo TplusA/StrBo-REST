@@ -121,7 +121,7 @@ class Directories:
     """
     _external_directories = {
         'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
-        'recovery_workdir': Path('/var/local/data/recovery_data_update'),
+        'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
     }
 
     @staticmethod
