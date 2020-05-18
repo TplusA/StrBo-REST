@@ -41,6 +41,26 @@ from .utils import get_logger
 log = get_logger()
 
 
+def _compute_file_checksum(file):
+    h = sha256()
+
+    if not file.exists():
+        log.warning('File {} missing, cannot compute checksum'.format(file))
+        return None
+
+    log.debug('Computing checksum of file {}'.format(file))
+    with file.open('rb') as f:
+        while True:
+            data = f.read(512 * 1024)
+
+            if not data:
+                break
+
+            h.update(data)
+
+    return h.hexdigest()
+
+
 def _generate_file_info(file, checksums):
     expected = 'unavailable' if not checksums or file.name not in checksums\
                else checksums[file.name]
@@ -50,21 +70,8 @@ def _generate_file_info(file, checksums):
         'expected_checksum': expected
     }
 
-    h = sha256()
-
-    if file.exists():
-        log.debug('Computing checksum of file {}'.format(file))
-        with file.open('rb') as f:
-            while True:
-                data = f.read(512 * 1024)
-
-                if not data:
-                    break
-
-                h.update(data)
-
-        computed = h.hexdigest()
-    else:
+    computed = _compute_file_checksum(file)
+    if computed is None:
         log.warning('File {} missing, cannot compute checksum'.format(file))
         computed = 'file missing'
 
