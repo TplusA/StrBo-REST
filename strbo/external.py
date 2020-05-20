@@ -124,6 +124,7 @@ class Directories:
         'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
         'recovery_system_workdir':
             Path('/var/local/data/recovery_system_update'),
+        'recovery_system_config': Path('/var/local/etc'),
     }
 
     @staticmethod

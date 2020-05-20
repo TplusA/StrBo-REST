@@ -31,6 +31,7 @@ from zlib import adler32
 import halogen
 import re
 import shlex
+import dbus
 
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Tools, Files, Directories, Helpers
@@ -1316,12 +1317,110 @@ class SReplace(Endpoint):
         return self.url if self.processing else None
 
 
+class SystemReboot(Endpoint):
+    """**API Endpoint** - Boot the recovery system.
+
+    +-------------+-----------------------------------------------------------+
+    | HTTP method | Description                                               |
+    +=============+===========================================================+
+    | ``POST``    | Ask the system to shutdown and boot the recovery system.  |
+    |             | To protect the innocent (i.e., avoid accidental reboots), |
+    |             | a JSON object must be sent which contains a magic value   |
+    |             | and further request parameters.                           |
+    +-------------+-----------------------------------------------------------+
+
+    Details on method ``POST``:
+        A JSON object must be sent which contains the field ``request`` set to
+        the deliberately long string value,
+        ``Please kindly recover the system: I really know what I am doing``.
+
+        The JSON object may also contain the field ``keep_user_data``, which
+        must, if present, be set to either ``true`` or ``false``. If the field
+        is missing, then its value is assumed as ``false``, i.e., a complete
+        recovery to factory defaults.
+
+        An update by image files can be done by setting ``keep_user_data`` to
+        ``true``, but please be aware of the implied side effects. Keeping old
+        configuration data around may lead to random problems at runtime in
+        case the newly installed software cannot cope with the existing
+        configuration files. It is also possible for different versions of
+        software to have their configuration data in different places. Thus,
+        installing a different version without involvement of a package manager
+        may lead to two sets of configuration data: one for the previous
+        version, and one for the current version. Switching back and forth
+        between versions also switches between the two sets of configuration
+        data, which will be very confusing to the user.
+    """
+
+    #: Path to endpoint.
+    href = '/recovery/system/reboot'
+
+    #: Supported HTTP methods.
+    methods = ('POST',)
+
+    def __init__(self):
+        Endpoint.__init__(self, 'recovery_system_reboot',
+                          name='reboot_system',
+                          title='Reboot and enter recovery system')
+
+    def __call__(self, request, **values):
+        req = request.json
+        if not req:
+            return Response('JSON object missing', status=400)
+
+        keep_user_data = req.get('keep_user_data', False)
+        request = req.get('request', None)
+
+        try:
+            if request is None:
+                raise TypeError('Request missing')
+
+            if not isinstance(request, str):
+                raise TypeError('Request must be string')
+
+            if not isinstance(keep_user_data, bool):
+                raise TypeError('Parameter keep_user_data must be bool')
+
+            if request != 'Please kindly recover the system: ' \
+                          'I really know what I am doing':
+                return Response('Request blocked', status=403)
+        except Exception as e:
+            return Response('Exception: ' + str(e), status=400)
+
+        boot_config = \
+            Directories.get('recovery_system_config') / \
+            'recovery_system_boot.rc'
+
+        if keep_user_data:
+            with boot_config.open('w') as f:
+                f.write('KEEP_USER_DATA="yes"\n')
+        else:
+            boot_config.unlink(missing_ok=True)
+
+        log.info('Rebooting into recovery system {}'
+                 .format('(preserving user data)' if keep_user_data
+                         else 'for full recovery'))
+
+        try:
+            bus = dbus.SystemBus()
+            systemd = bus.get_object('org.freedesktop.systemd1',
+                                     '/org/freedesktop/systemd1')
+            manager = dbus.Interface(systemd,
+                                     'org.freedesktop.systemd1.Manager')
+            manager.StartUnit('recovery.target', 'isolate')
+            return Response()
+        except Exception as e:
+            log.error('Reboot failed: {}'.format(e))
+            return Response('Exception: ' + str(e), status=400)
+
+
 data_status_endpoint = DStatus()
 system_status_endpoint = SStatus()
 
 all_endpoints = [
     data_status_endpoint, DVerify(data_status_endpoint), DReplace(),
     system_status_endpoint, SVerify(system_status_endpoint), SReplace(),
+    SystemReboot(),
 ]
 
 
