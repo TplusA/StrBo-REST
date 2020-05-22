@@ -1,3 +1,17 @@
+2020-05-22  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.7 released.
+
+	* Recovery: Added endpoints for managing the recovery system. We can
+	  now exchange and verify the recovery system, i.e., the boot
+	  partition of the recovery system. In addition, we can also ask the
+	  system to reboot to enter the recovery system.
+
+	* Misc: More work on porting to Yocto Project "dunfell" (paths, gpg2,
+	  public key management).
+
+	* Misc: Several style fixes.
+
 2020-05-07  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.6 released.
