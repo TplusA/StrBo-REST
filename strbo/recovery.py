@@ -1239,7 +1239,7 @@ class SReplace(Endpoint):
         synchronization with end of replacement.
 
         It is a *very* good idea to verify the recovery system after the system
-        has been replaced (see :class:`DVerify`). There is only a very small
+        has been replaced (see :class:`SVerify`). There is only a very small
         chance of verification failure after successful replacement of the
         recovery system, but in this particular case it is much better to be
         safe than sorry.
