@@ -1395,7 +1395,10 @@ class SystemReboot(Endpoint):
             with boot_config.open('w') as f:
                 f.write('KEEP_USER_DATA="yes"\n')
         else:
-            boot_config.unlink(missing_ok=True)
+            try:
+                boot_config.unlink()
+            except FileNotFoundError:
+                pass
 
         log.info('Rebooting into recovery system {}'
                  .format('(preserving user data)' if keep_user_data
