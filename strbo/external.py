@@ -33,6 +33,7 @@ class Directories:
     """
     _external_directories = {
         'sysconfdir': Path('/etc'),
+        'localsysconfdir': Path('/var/local/etc'),
         'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
         'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
         'recovery_system_workdir':
@@ -126,6 +127,8 @@ class Files:
         # package: signing-keys-packagefeed
         'gpg_key': Directories.get('sysconfdir') /
              'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
+        'strbo-release': Directories.get('sysconfdir') / 'strbo-release',
+        'appliance.ini': Directories.get('localsysconfdir') / 'appliance.ini',
     }
 
     @staticmethod

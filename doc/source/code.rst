@@ -131,6 +131,12 @@ Recovery system management
 .. automodule:: strbo.recovery
    :members:
 
+HiFi system management and software updates
+-------------------------------------------
+
+.. automodule:: strbo.system
+   :members:
+
 
 Internals
 =========
@@ -157,6 +163,9 @@ Utilities and miscellaneous
 ---------------------------
 
 .. automodule:: strbo.utils
+   :members:
+
+.. automodule:: strbo.version
    :members:
 
 .. automodule:: strbo.listerrors
