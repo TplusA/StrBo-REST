@@ -24,6 +24,32 @@ import os
 import subprocess
 
 
+class Directories:
+    """Keep track of directories used by the implementation.
+
+    Central point for adapting directories. This class (and classes
+    :class:`Tools` and :class:`Files`) should probably become configuration
+    files.
+    """
+    _external_directories = {
+        'sysconfdir': Path('/etc'),
+        'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
+        'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
+        'recovery_system_workdir':
+            Path('/var/local/data/recovery_system_update'),
+        'recovery_system_config': Path('/var/local/etc'),
+    }
+
+    @staticmethod
+    def get(dir_id):
+        """Return directory by its symbolic name, or throw a :class:`KeyError`
+        exception in case the directory is unknown."""
+        try:
+            return Directories._external_directories[dir_id]
+        except KeyError:
+            raise KeyError('Directory {} not registered'.format(dir_id))
+
+
 class Tools:
     """Keep track of external tools used by endpoint implementations and
     external helper scripts.
@@ -98,8 +124,8 @@ class Files:
     """
     _external_files = {
         # package: signing-keys-packagefeed
-        'gpg_key': Path('/etc/pki/packagefeed-gpg/'
-                        'PACKAGEFEED-GPG-KEY-strbo-main-V2'),
+        'gpg_key': Directories.get('sysconfdir') /
+             'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
     }
 
     @staticmethod
@@ -110,31 +136,6 @@ class Files:
             return Files._external_files[file_id]
         except KeyError:
             raise KeyError('File {} not registered'.format(file_id))
-
-
-class Directories:
-    """Keep track of directories used by the implementation.
-
-    Central point for adapting directories. This class (and classes
-    :class:`Tools` and :class:`Files`) should probably become configuration
-    files.
-    """
-    _external_directories = {
-        'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
-        'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
-        'recovery_system_workdir':
-            Path('/var/local/data/recovery_system_update'),
-        'recovery_system_config': Path('/var/local/etc'),
-    }
-
-    @staticmethod
-    def get(dir_id):
-        """Return directory by its symbolic name, or throw a :class:`KeyError`
-        exception in case the directory is unknown."""
-        try:
-            return Directories._external_directories[dir_id]
-        except KeyError:
-            raise KeyError('Directory {} not registered'.format(dir_id))
 
 
 class _Helper:
