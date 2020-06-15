@@ -25,6 +25,7 @@ from zlib import adler32
 import halogen
 import configparser
 
+import strbo.update_strbo
 from .endpoint import Endpoint, register_endpoints
 from .external import Files
 from .utils import jsonify_e
@@ -79,15 +80,49 @@ class Device:
 class DeviceInfo(Endpoint):
     """**API Endpoint** - Accessing a device connected to the system.
 
-    +-------------+-------------------------------------------------+
-    | HTTP method | Description                                     |
-    +=============+=================================================+
-    | ``GET``     | Read out information about music device `{id}`. |
-    |             | See :class:`DeviceSchema`.                      |
-    +-------------+-------------------------------------------------+
+    +-------------+--------------------------------------------------------+
+    | HTTP method | Description                                            |
+    +=============+========================================================+
+    | ``GET``     | Read out information about music device `{id}`.        |
+    |             | See :class:`DeviceSchema`.                             |
+    +-------------+--------------------------------------------------------+
+    | ``POST``    | Send software update request to the device `{id}`. The |
+    |             | request is sent as a JSON object.                      |
+    +-------------+--------------------------------------------------------+
 
     To avoid issues with (lack of) locking, this class should not accessed
     directly, but through the :class:`Devices` class.
+
+    Details on method ``GET``:
+        The device information contains an objected named ``software_versions``
+        which lists all software and their versions installed on the device.
+        The version information is software-specific, but the field
+        ``description`` should always be there, and the field ``number``, if
+        present, should contain the version string. More detailed version
+        information (such as commit ID) may or may not be available.
+
+        The software version's field ``supports_update`` indicates if sending
+        an update request for the corresponding software is possible at all. In
+        case this field is missing, its value is assumed to be ``False``. In
+        case an update is not supported, the software may still be updatable by
+        updating another entity listed in ``software_versions``. Whether or not
+        this is the case or how exactly the update must be performed is
+        completely device-specific and is not covered by this API
+        specification.
+
+    Details on method ``POST``:
+        The software update request sent to the device is a JSON object which
+        contains an array of smaller requests, each covering exactly one piece
+        of software. Each such small piece contains information specific to the
+        software to be updated. Only those software entities reported to
+        support updates (see method ``GET``) should be included in the request.
+
+        The update request object must contain a field named ``update`` which
+        stores the array of individual update requests. Each of these requests
+        must contain a field named ``id`` which identifies one of the software
+        entities returned by a ``GET`` request. Requests with an unknown ``id``
+        are skipped. All other fields, their names and semantics, in these
+        requests are specific to the software ``id``.
     """
 
     #: Path to endpoint.
@@ -95,7 +130,7 @@ class DeviceInfo(Endpoint):
     href_for_map = '/system/devices/<id>'
 
     #: Supported HTTP methods.
-    methods = ('GET',)
+    methods = ('GET', 'POST')
 
     lock = RLock()
 
@@ -109,17 +144,41 @@ class DeviceInfo(Endpoint):
 
     def __call__(self, request, id, **values):
         with self.lock:
-            cached = if_none_match(request, self.devices.get_etag())
-            if cached:
-                return cached
+            if request.method == 'GET':
+                return self._handle_get(request)
+            else:
+                return self._handle_post(request)
 
-            device = self.devices.get_device_by_id(id)
+    def _handle_get(self, request):
+        cached = if_none_match(request, self.devices.get_etag())
+        if cached:
+            return cached
 
-            if device is None:
-                return jsonify_e(request, self.devices.get_etag(), 20, {})
+        device = self.devices.get_device_by_id(id)
 
-            return jsonify_e(request, self.devices.get_etag(), 12 * 3600,
-                             DeviceSchema.serialize(device))
+        if device is None:
+            return jsonify_e(request, self.devices.get_etag(), 20, {})
+
+        return jsonify_e(request, self.devices.get_etag(), 12 * 3600,
+                         DeviceSchema.serialize(device))
+
+    def _handle_post(self, request):
+        req = request.json
+        if not req:
+            return Response('JSON object missing', status=400)
+
+        for r in request.json.get('update', []):
+            sw_id = r.get('id', None)
+            if sw_id is None:
+                continue
+
+            if sw_id == 'strbo':
+                strbo.update_strbo.update(r)
+            else:
+                log.warning('Skipping update request for unknown id "{}"'
+                            .format(sw_id))
+
+        return Response(status=204)
 
 
 class DevicesSchema(halogen.Schema):
@@ -181,7 +240,7 @@ class Devices(Endpoint):
         'unknown': ('*** UNKNOWN DEVICE ***', None),
         'strbo': ('T+A Streaming Board Appliance', None),
         'R1000E': ('T+A R 1000 E', {
-            'update': {'description': 'Update Package'},
+            'update': {'description': 'Update Package', 'supports_update': True},
             'main_bootloader': {'description': 'Application CPU Bootloader'},
             'main_application': {'description': 'Application CPU Main'},
             'dab_fm': {'description': 'DAB/FM Module'},
@@ -229,7 +288,8 @@ class Devices(Endpoint):
         self._clear()
 
         try:
-            v = {'strbo': {'description': 'T+A Streaming Board'}}
+            v = {'strbo': {'description': 'T+A Streaming Board',
+                           'supports_update': True}}
 
             # add ourselves
             sr = read_strbo_release_file(Files.get('strbo-release'))
