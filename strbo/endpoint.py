@@ -267,7 +267,7 @@ def dispatch(request):
     return dispatchers[id](request, **values)
 
 
-def url_for(environ_or_request, endpoint):
+def url_for(environ_or_request, endpoint, values=None):
     """Generate a URL for an :class:`Endpoint`.
 
     Never, ever try to generate URLs by hand, always use this function. This
@@ -287,4 +287,4 @@ def url_for(environ_or_request, endpoint):
     else:
         adapter = url_map.bind_to_environ(environ_or_request)
 
-    return adapter.build(endpoint.id)
+    return adapter.build(endpoint.id, values=values)
