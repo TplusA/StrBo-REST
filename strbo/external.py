@@ -101,16 +101,30 @@ class Tools:
             raise KeyError('Tool {} not registered'.format(tool_id))
 
     @staticmethod
+    def _flatten_arglist(tool, *args):
+        cmd = [tool]
+
+        for sub in args:
+            if isinstance(sub, list):
+                cmd += [str(a) for a in sub]
+            else:
+                cmd.append(str(sub))
+
+        return cmd
+
+    @staticmethod
     def invoke(timeout, tool_id, *args):
         """Convenience method for running an external tool with parameters."""
-        cmd = subprocess.Popen([Tools.get(tool_id)] + [str(a) for a in args])
+        cmd = subprocess.Popen(Tools._flatten_arglist(Tools.get(tool_id),
+                                                      *args))
         return cmd.wait(timeout)
 
     @staticmethod
     def invoke_cwd(cwd, timeout, tool_id, *args):
         """Convenience method for running an external tool with parameters in
         a given working directory."""
-        cmd = subprocess.Popen([Tools.get(tool_id)] + [str(a) for a in args],
+        cmd = subprocess.Popen(Tools._flatten_arglist(Tools.get(tool_id),
+                                                      *args),
                                cwd=str(cwd))
         return cmd.wait(timeout)
 
