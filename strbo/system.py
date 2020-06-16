@@ -27,8 +27,8 @@ import halogen
 import configparser
 
 import strbo.update_strbo
-from .endpoint import Endpoint, register_endpoints
-from .external import Files
+from .endpoint import Endpoint, url_for, register_endpoints
+from .external import Files, Directories
 from .utils import jsonify_e
 from .utils import if_none_match
 from .utils import get_logger
@@ -124,6 +124,14 @@ class DeviceInfo(Endpoint):
         entities returned by a ``GET`` request. Requests with an unknown ``id``
         are skipped. All other fields, their names and semantics, in these
         requests are specific to the software ``id``.
+
+        If there is an update in progress, then the response will be an
+        immediate redirect to this endpoint with an HTTP status code 303.
+
+        Clients should always wait for a response before sending another
+        `POST`` request. Internally, the ``update_workdir`` directory is used
+        to find out if an update is currently being processed; it also serves
+        as a working directory.
     """
 
     #: Path to endpoint.
@@ -137,7 +145,7 @@ class DeviceInfo(Endpoint):
 
     def __init__(self, devices):
         Endpoint.__init__(
-            self, 'tahifi_device', name='device_info',
+            self, 'hifi_system_device', name='device_info',
             title='Accessing a specific device in the T+A HiFi system'
         )
 
@@ -147,8 +155,19 @@ class DeviceInfo(Endpoint):
         with self.lock:
             if request.method == 'GET':
                 return self._handle_get(request)
-            else:
-                return self._handle_post(request)
+
+            if Directories.get('update_workdir').exists():
+                result = Response(status=303)
+                result.location = url_for(request, self, {'id': id})
+                return result
+
+            workdir = Directories.get('update_workdir', True)
+            if not workdir.exists():
+                return Response(status=500)
+
+        # we end up here in case a ``POST`` request was sent and the
+        # ``update_workdir`` has just been created
+        return self._handle_post(request, workdir)
 
     def _handle_get(self, request):
         cached = if_none_match(request, self.devices.get_etag())
@@ -163,7 +182,7 @@ class DeviceInfo(Endpoint):
         return jsonify_e(request, self.devices.get_etag(), 12 * 3600,
                          DeviceSchema.serialize(device))
 
-    def _handle_post(self, request):
+    def _handle_post(self, request, workdir):
         req = request.json
         if not req:
             return Response('JSON object missing', status=400)
@@ -174,10 +193,31 @@ class DeviceInfo(Endpoint):
                 continue
 
             if sw_id == 'strbo':
-                strbo.update_strbo.update(r)
+                lockfile = workdir / 'rest-api.lock'
+
+                try:
+                    lockfile.touch(exist_ok=True)
+                except Exception as e:
+                    lockfile = None
+                    log.error('Failed creating lock file: {}'.format(e))
+                else:
+                    strbo.update_strbo.update(r, lockfile)
+
+                if lockfile is not None:
+                    try:
+                        lockfile.unlink()
+                    except FileNotFoundError:
+                        log.info('Expecting system reboot soon')
+                    except:  # noqa: E722
+                        pass
             else:
                 log.warning('Skipping update request for unknown id "{}"'
                             .format(sw_id))
+
+        try:
+            workdir.rmdir()
+        except Exception as e:
+            log.error('Failed removing directory {}: {}'.format(workdir, e))
 
         return Response(status=204)
 
@@ -252,7 +292,7 @@ class Devices(Endpoint):
 
     def __init__(self):
         Endpoint.__init__(
-            self, 'system_devices', name='all_devices',
+            self, 'hifi_system_devices', name='all_devices',
             title='List of all T+A devices connected to the system'
         )
 

@@ -36,6 +36,7 @@ class Directories:
         'sysconfdir': Path('/etc'),
         'localsysconfdir': Path('/var/local/etc'),
         'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
+        'update_workdir': Path('/var/local/data/system_update_data'),
         'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
         'recovery_system_workdir':
             Path('/var/local/data/recovery_system_update'),
@@ -43,13 +44,21 @@ class Directories:
     }
 
     @staticmethod
-    def get(dir_id):
+    def get(dir_id, ensure_exists=False):
         """Return directory by its symbolic name, or throw a :class:`KeyError`
         exception in case the directory is unknown."""
         try:
-            return Directories._external_directories[dir_id]
+            d = Directories._external_directories[dir_id]
         except KeyError:
             raise KeyError('Directory {} not registered'.format(dir_id))
+
+        if ensure_exists:
+            try:
+                d.mkdir()
+            except FileExistsError:
+                pass
+
+        return d
 
 
 class Tools:
@@ -89,6 +98,10 @@ class Tools:
 
         # package: bash or similar
         'sh':           '/bin/sh',
+
+        # package: UpdaTA
+        'updata_plan':  '/usr/bin/updata_determine_strategy.py',
+        'updata_exec':  '/usr/bin/updata_execute.py',
     }
 
     @staticmethod
@@ -279,3 +292,4 @@ def register_helpers(path):
                      ('rm', 'tar', 'readlink', 'test'), timeout=300)
     Helpers.register('replace_recovery_system',
                      ('mount', 'umount', 'test', 'dd'), timeout=300)
+    Helpers.register('updata_execute', ('updata_exec',), timeout=3600)
