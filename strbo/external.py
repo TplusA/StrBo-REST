@@ -153,8 +153,9 @@ class Files:
     """
     _external_files = {
         # package: signing-keys-packagefeed
-        'gpg_key': Directories.get('sysconfdir') /
-             'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
+        'gpg_key':
+            Directories.get('sysconfdir') /
+            'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
         'strbo-release': Directories.get('sysconfdir') / 'strbo-release',
         'appliance.ini': Directories.get('localsysconfdir') / 'appliance.ini',
     }

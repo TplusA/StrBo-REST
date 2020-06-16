@@ -123,9 +123,11 @@ class VersionNumber:
             >>> VersionNumber(1, 0, 0, hotfix='x') \
                     .matches(VersionNumber(1, 0, 0, hotfix='x'))
             True
-            >>> VersionNumber(1, 0, 0, hotfix='b').matches(VersionNumber(1, 0, 0))
+            >>> VersionNumber(1, 0, 0, hotfix='b') \
+                    .matches(VersionNumber(1, 0, 0))
             False
-            >>> VersionNumber(1, 0, 0).matches(VersionNumber(1, 0, 0, hotfix='b'))
+            >>> VersionNumber(1, 0, 0) \
+                    .matches(VersionNumber(1, 0, 0, hotfix='b'))
             False
 
         Matches with patterns
@@ -138,7 +140,8 @@ class VersionNumber:
             >>> VersionNumber(1, 0, '*') \
                     .matches(VersionNumber(1, 0, 5, hotfix='e'))
             True
-            >>> VersionNumber(1, 0, '*').matches(VersionNumber(1, 0, 5, beta=0))
+            >>> VersionNumber(1, 0, '*') \
+                    .matches(VersionNumber(1, 0, 5, beta=0))
             False
             >>> VersionNumber(1, 0, '*').matches(VersionNumber(1, 1, 0))
             False
@@ -251,13 +254,15 @@ class VersionNumber:
             True
             >>> VersionNumber(1, 5, 5) < VersionNumber(1, 5, 5, beta=1)
             True
-            >>> VersionNumber(1, 5, 5, hotfix='a') < VersionNumber(1, 5, 5, beta=1)
+            >>> VersionNumber(1, 5, 5, hotfix='a') < \
+                    VersionNumber(1, 5, 5, beta=1)
             True
             >>> VersionNumber(1, 5, 6) < VersionNumber(1, 5, 5, beta=1)
             False
             >>> VersionNumber(1, 5, 5, beta=0) < VersionNumber(1, 5, 5)
             False
-            >>> VersionNumber(1, 5, 5, hotfix='c') < VersionNumber(1, 5, 5, beta=0)
+            >>> VersionNumber(1, 5, 5, hotfix='c') < \
+                    VersionNumber(1, 5, 5, beta=0)
             True
         """
         def is_smaller(a, b):
@@ -301,7 +306,8 @@ class VersionNumber:
         :doctest:
             >>> VersionNumber(1, 2, 3) == VersionNumber(1, 2, 3)
             True
-            >>> VersionNumber(1, 2, 3, beta=4) == VersionNumber(1, 2, 3, beta=4)
+            >>> VersionNumber(1, 2, 3, beta=4) == VersionNumber(1, 2, 3, \
+                                                                beta=4)
             True
             >>> VersionNumber(1, 2, 3, hotfix='n') == \
                 VersionNumber(1, 2, 3, hotfix='n')
@@ -327,9 +333,11 @@ class VersionNumber:
             False
             >>> VersionNumber(1, 2, 3) == VersionNumber(4, 2, 3)
             False
-            >>> VersionNumber(1, 2, 3, beta=4) == VersionNumber(1, 2, 3, beta=5)
+            >>> VersionNumber(1, 2, 3, beta=4) == VersionNumber(1, 2, 3, \
+                                                                beta=5)
             False
-            >>> VersionNumber(1, 2, 3, beta=5) == VersionNumber(1, 2, 3, beta=4)
+            >>> VersionNumber(1, 2, 3, beta=5) == VersionNumber(1, 2, 3, \
+                                                                beta=4)
             False
             >>> VersionNumber(1, 2, 3, hotfix='n') == \
                 VersionNumber(1, 2, 3, hotfix='b')
