@@ -1,4 +1,4 @@
-.PHONY: all clean check check-relaxed documentation documentation-html documentation-pdf
+.PHONY: all clean check check-relaxed test documentation documentation-html documentation-pdf
 
 PYTHONFILES = $(wildcard *.py strbo/*.py)
 
@@ -12,6 +12,7 @@ all:
 	@echo '  documentation-pdf  - Generate API documentation in PDF format only'
 	@echo '  check         - Analyze code with pyflakes and ${FLAKE8}'
 	@echo '  check-relaxed - Analyze code with relaxed setting, ignoring some issues'
+	@echo '  test          - Run unit tests'
 	@echo '  clean         - Remove all generated files'
 
 check:
@@ -21,6 +22,9 @@ check:
 check-relaxed:
 	python3 -m pyflakes $(PYTHONFILES)
 	python3 -m ${FLAKE8} ${FLAKE8_OPTIONS} --ignore=E501,W504 $(PYTHONFILES)
+
+test:
+	python3 -m strbo.version
 
 documentation: documentation-html documentation-pdf
 
