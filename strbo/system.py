@@ -154,7 +154,7 @@ class DeviceInfo(Endpoint):
     def __call__(self, request, id, **values):
         with self.lock:
             if request.method == 'GET':
-                return self._handle_get(request)
+                return self._handle_get(request, id)
 
             if Directories.get('update_workdir').exists():
                 result = Response(status=303)
@@ -169,7 +169,7 @@ class DeviceInfo(Endpoint):
         # ``update_workdir`` has just been created
         return self._handle_post(request, workdir)
 
-    def _handle_get(self, request):
+    def _handle_get(self, request, id):
         cached = if_none_match(request, self.devices.get_etag())
         if cached:
             return cached
