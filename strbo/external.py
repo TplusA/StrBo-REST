@@ -104,6 +104,13 @@ class Tools:
         'updata_exec':  '/usr/bin/updata_execute.py',
     }
 
+    _logger = None
+
+    @staticmethod
+    def set_logger(logger):
+        """Set logger instance for logging tool invocations."""
+        Tools._logger = logger
+
     @staticmethod
     def get(tool_id):
         """Return path to known executable, or throw a :class:`KeyError`
@@ -126,11 +133,26 @@ class Tools:
         return cmd
 
     @staticmethod
+    def _invoke(cmd, timeout):
+        try:
+            outs, errs = cmd.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            cmd.kill()
+            outs, errs = cmd.communicate()
+
+        if cmd.returncode != 0 and Tools._logger:
+            Tools._logger.error('Command {} FAILED with exit code {}'
+                                .format(' '.join(cmd.args), cmd.returncode))
+            Tools._logger.error('Command stderr: {}'.format(errs))
+
+        return cmd.returncode
+
+    @staticmethod
     def invoke(timeout, tool_id, *args):
         """Convenience method for running an external tool with parameters."""
         cmd = subprocess.Popen(Tools._flatten_arglist(Tools.get(tool_id),
                                                       *args))
-        return cmd.wait(timeout)
+        return Tools._invoke(cmd, timeout)
 
     @staticmethod
     def invoke_cwd(cwd, timeout, tool_id, *args):
@@ -139,7 +161,7 @@ class Tools:
         cmd = subprocess.Popen(Tools._flatten_arglist(Tools.get(tool_id),
                                                       *args),
                                cwd=str(cwd))
-        return cmd.wait(timeout)
+        return Tools._invoke(cmd, timeout)
 
 
 class Files:
@@ -178,23 +200,29 @@ class _Helper:
 
     def invoke(self, logger, *args):
         if logger:
-            logger.info('Executing helper {} {}'.
-                        format(self._script_name,
-                               ' '.join([str(a) for a in args])))
+            logger.info('Executing helper {} {}'
+                        .format(self._script_name,
+                                ' '.join([str(a) for a in args])))
 
         cmd = subprocess.Popen(
             ['/usr/bin/sudo', str(self._script_name)] + [str(a) for a in args],
-            cwd=self._cwd)
-        result = cmd.wait(self._timeout)
+            cwd=self._cwd, stderr=subprocess.PIPE)
+
+        try:
+            outs, errs = cmd.communicate(timeout=self._timeout)
+        except subprocess.TimeoutExpired:
+            cmd.kill()
+            outs, errs = cmd.communicate()
 
         if logger:
-            if result == 0:
+            if cmd.returncode == 0:
                 logger.info('Helper {} succeeded'.format(self._script_name))
             else:
-                logger.error('Helper {} exit code {}'.
-                             format(self._script_name, result))
+                logger.error('Helper {} exit code {}'
+                             .format(self._script_name, cmd.returncode))
+                logger.error('Helper stderr: {}'.format(errs))
 
-        return result
+        return cmd.returncode
 
 
 class Helpers:
@@ -260,8 +288,8 @@ class Helpers:
                 Tools.get(dep)
             except:  # noqa: E722
                 raise NameError(
-                    'Cannot register helper {} with unmet dependencies'.
-                    format(name))
+                    'Cannot register helper {} with unmet dependencies'
+                    .format(name))
 
         script = Helpers._path / (name + '.sh')
 

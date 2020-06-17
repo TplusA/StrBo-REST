@@ -38,7 +38,7 @@ from .network import add_endpoints as add_network_config_endpoints
 
 from .dbus import Bus
 from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
-from .external import Helpers
+from .external import Helpers, Tools
 from .utils import get_logger, jsonify
 log = get_logger()
 
@@ -142,6 +142,7 @@ class StrBo:
         self.entry_point = EntryPoint()
 
         Helpers.set_logger(log)
+        Tools.set_logger(log)
 
         register_endpoint(self.entry_point)
 
