@@ -74,8 +74,8 @@ class ClientListener:
                              remove_cb=self.remove_client_cb)
 
     def stop(self):
+        os.write(self.stop_fd_write, b'exit\n\0')
         os.close(self.stop_fd_write)
-        os.close(self.stop_fd_read)
         self.thread.join()
         self.thread = None
 
@@ -111,6 +111,7 @@ class ClientListener:
                          add_cb=add_cb, remove_cb=remove_cb)
 
         log.info('Server thread terminates')
+        os.close(self.stop_fd_read)
 
 
 class Event:
