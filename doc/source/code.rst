@@ -137,6 +137,9 @@ HiFi system management and software updates
 .. automodule:: strbo.system
    :members:
 
+.. automodule:: strbo.update_strbo
+   :members:
+
 
 Internals
 =========

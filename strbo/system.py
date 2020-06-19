@@ -32,6 +32,7 @@ from .external import Files, Directories
 from .utils import jsonify_e
 from .utils import if_none_match
 from .utils import get_logger
+from .utils import remove_directory
 from .version import read_strbo_release_file
 log = get_logger()
 
@@ -76,6 +77,29 @@ class Device:
         self.description = description
         self.device_id = device_id
         self.software_versions = software_versions
+
+
+def _try_launch_strbo_update_process(update_req, workdir):
+    lockfile = workdir / 'rest-api.lock'
+
+    try:
+        lockfile.touch(exist_ok=True)
+    except Exception as e:
+        log.error('Failed creating lock file: {}'.format(e))
+        return False
+    else:
+        strbo.update_strbo.update(update_req, lockfile)
+
+    try:
+        lockfile.unlink()
+        log.error('Failed lauching StrBo update')
+    except FileNotFoundError:
+        log.info('Launched update process in background')
+        return True
+    except Exception as e:
+        log.error('Failed lauching StrBo update: {}'.format(e))
+
+    return False
 
 
 class DeviceInfo(Endpoint):
@@ -143,6 +167,8 @@ class DeviceInfo(Endpoint):
 
     lock = RLock()
 
+    strbo_update_monitor = None
+
     def __init__(self, devices):
         Endpoint.__init__(
             self, 'hifi_system_device', name='device_info',
@@ -187,39 +213,65 @@ class DeviceInfo(Endpoint):
         if not req:
             return Response('JSON object missing', status=400)
 
+        strbo_update_launched = False
+
         for r in request.json.get('update', []):
             sw_id = r.get('id', None)
             if sw_id is None:
                 continue
 
             if sw_id == 'strbo':
-                lockfile = workdir / 'rest-api.lock'
-
-                try:
-                    lockfile.touch(exist_ok=True)
-                except Exception as e:
-                    lockfile = None
-                    log.error('Failed creating lock file: {}'.format(e))
+                if strbo_update_launched:
+                    log.error('Tried launching StrBo update multiple times')
                 else:
-                    strbo.update_strbo.update(r, lockfile)
-
-                if lockfile is not None:
-                    try:
-                        lockfile.unlink()
-                    except FileNotFoundError:
-                        log.info('Expecting system reboot soon')
-                    except:  # noqa: E722
-                        pass
+                    strbo_update_launched = \
+                        _try_launch_strbo_update_process(r, workdir)
             else:
                 log.warning('Skipping update request for unknown id "{}"'
                             .format(sw_id))
+
+        if strbo_update_launched:
+            # we still need the working directory and need to monitor it for
+            # changes
+            self.strbo_update_monitor = \
+                strbo.update_strbo.UpdateMonitor(
+                        workdir, start=True,
+                        on_done=lambda status: self.on_update_done(status))
+            return Response(status=202)
 
         try:
             workdir.rmdir()
         except Exception as e:
             log.error('Failed removing directory {}: {}'.format(workdir, e))
+            return Response(status=500)
 
-        return Response(status=204)
+        return Response(status=200)
+
+    def on_update_done(self, status):
+        workdir = self.strbo_update_monitor.get_workdir()
+        self.strbo_update_monitor = None
+
+        if status is strbo.update_strbo.UpdateStatus.SUCCESS:
+            log.info('Streaming Board update done')
+        elif status is strbo.update_strbo.UpdateStatus.ABORTED:
+            log.info('Streaming Board update aborted')
+        elif status is strbo.update_strbo.UpdateStatus.FAILED_FIRST_TIME:
+            log.warning('Restarting Streaming Board update after failure')
+
+            (workdir / 'update_started').unlink()
+            (workdir / 'update_try_restart').touch()
+
+            if _try_launch_strbo_update_process(
+                    {'plan_file': str(workdir / 'rest_update.plan')}, workdir):
+                self.strbo_update_monitor = \
+                    strbo.update_strbo.UpdateMonitor(
+                            workdir, start=True,
+                            on_done=lambda st: self.on_update_done(st))
+        elif status is strbo.update_strbo.UpdateStatus.FAILED_SECOND_TIME:
+            log.error('Streaming Board update failed completely')
+
+        if status is not strbo.update_strbo.UpdateStatus.FAILED_FIRST_TIME:
+            remove_directory(workdir)
 
 
 class DevicesSchema(halogen.Schema):

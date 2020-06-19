@@ -1,27 +1,27 @@
 #! /bin/sh
 #
-# Execute an update plan using updata_execute.py
+# Execute an update plan using the generated script system_update.sh as user
+# "updata". The update script is executed in the background, i.e., this script
+# will exit very quickly. The update script will continue to run in the
+# background.
 #
 # Parameters:
-# 1. Path to update plan.
-# 2. Which part of the update shall be executed, either 'update' or 'reboot'.
+# 1. Absolute path to the generated script.
+# 2. Absolute path to stamp directory.
 #
 
 set -eu
 
 if /usr/bin/test $# -ne 2; then exit 99; fi
 
-PLAN="$1"
-MODE="$2"
+SCRIPT="$1"
+STAMPDIR="$2"
 
-if /usr/bin/test "x${MODE}" = 'xupdate'
-then
-    MODE='--avoid-reboot'
-elif /usr/bin/test "x${MODE}" = 'xreboot'
-then
-    MODE='--reboot-only'
-else
-    exit 1
-fi
+if /usr/bin/test ! -f "${SCRIPT}"; then exit 50; fi
+if /usr/bin/test ! -d "${STAMPDIR}"; then exit 51; fi
 
-exec /usr/bin/updata_execute.py ${MODE} -p "${PLAN}"
+chown updata:rest "${STAMPDIR}"
+chmod 775 "${STAMPDIR}"
+
+cd /
+su updata -c "${SCRIPT}" </dev/null >/dev/null 2>&1 &
