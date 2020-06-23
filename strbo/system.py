@@ -25,6 +25,7 @@ from werkzeug.wrappers import Response
 from zlib import adler32
 import halogen
 import configparser
+import time
 
 import strbo.update_strbo
 from .endpoint import Endpoint, url_for, register_endpoints
@@ -260,6 +261,10 @@ class DeviceInfo(Endpoint):
 
             (workdir / 'update_started').unlink()
             (workdir / 'update_try_restart').touch()
+
+            # maybe it was just a mishap, let's try again after waiting for a
+            # few seconds
+            time.sleep(5)
 
             if _try_launch_strbo_update_process(
                     {'plan_file': str(workdir / 'rest_update.plan')}, workdir):
