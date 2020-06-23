@@ -212,6 +212,11 @@ class DeviceInfo(Endpoint):
     def _handle_post(self, request, workdir):
         req = request.json
         if not req:
+            try:
+                workdir.rmdir()
+            except Exception as e:
+                log.error('Failed removing directory {}: {}'
+                          .format(workdir, e))
             return Response('JSON object missing', status=400)
 
         strbo_update_launched = False
