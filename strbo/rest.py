@@ -26,6 +26,7 @@ from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
 from werkzeug.http import parse_options_header
 from json import loads
+from json.decoder import JSONDecodeError
 
 from .system import all_endpoints as all_system_endpoints
 from .system import add_endpoints as add_system_endpoints
@@ -127,10 +128,17 @@ class JSONRequest(Request):
         content type in the request is key to success.
         """
         ct = parse_options_header(self.headers.get('content-type'))
-        if ct[0] == 'application/json':
-            return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
-        else:
+        if ct[0] != 'application/json':
             return None
+
+        try:
+            return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
+        except UnicodeDecodeError as e:
+            log.error('Failed reading JSON payload: {}'.format(e))
+        except JSONDecodeError as e:
+            log.error('Failed parsing JSON payload: {}'.format(e))
+
+        return None
 
 
 class StrBo:
