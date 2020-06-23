@@ -159,6 +159,7 @@ class UpdateStatus(Enum):
     ABORTED = 2
     FAILED_FIRST_TIME = 3
     FAILED_SECOND_TIME = 4
+    FAILED_REBOOT = 5
 
 
 class UpdateMonitor(Thread):
@@ -205,7 +206,8 @@ class UpdateMonitor(Thread):
             if not self._workdir.exists():
                 log.info('StrBo Update: Work directory does not exist, '
                          'we are done here')
-                break
+                self._running = False
+                continue
 
             if not (self._workdir / 'update_started').exists():
                 log.info('StrBo Update: Not started yet')
@@ -216,24 +218,37 @@ class UpdateMonitor(Thread):
                 time.sleep(3)
                 continue
 
+            def dump_file_as_error(f, what):
+                errors = f.readlines()
+
+                if errors:
+                    log.error('StrBo Update: Captured {} error messages:\n{}'
+                              .format(what, ''.join(errors)))
+                else:
+                    log.error('StrBo Update: No error messages logged for {}'
+                              .format(what))
+
             if (self._workdir / 'update_failure').exists():
                 log.error('StrBo Update: Failed')
-                with (self._workdir / 'update_failure').open('r') as f:
-                    errors = f.readlines()
-
-                    if errors:
-                        log.error('StrBo Update: Captured error messages:\n{}'
-                                  .format(''.join(errors)))
-                    else:
-                        log.error('StrBo Update: No error messages logged')
+                dump_file_as_error(
+                    (self._workdir / 'update_failure').open('r'), 'update')
 
                 if (self._workdir / 'update_failure_again').exists():
                     status = UpdateStatus.FAILED_SECOND_TIME
                 else:
                     status = UpdateStatus.FAILED_FIRST_TIME
-            else:
+            elif (self._workdir / 'update_reboot_failed').exists():
+                log.error('StrBo Update: Reboot failed')
+                dump_file_as_error(
+                    (self._workdir / 'update_reboot_failed').open('r'),
+                    'reboot')
+                status = UpdateStatus.FAILED_REBOOT
+            elif (self._workdir / 'update_reboot_done').exists():
                 log.info('StrBo Update: Complete')
                 status = UpdateStatus.SUCCESS
+            else:
+                time.sleep(1)
+                continue
 
             self._running = False
 
