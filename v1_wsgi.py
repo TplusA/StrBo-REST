@@ -28,3 +28,4 @@ if __name__ == '__main__':
 
     from strbo import app
     WSGIServer(app).run()
+    app.close()
