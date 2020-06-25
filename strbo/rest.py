@@ -30,6 +30,7 @@ from json.decoder import JSONDecodeError
 
 from .system import all_endpoints as all_system_endpoints
 from .system import add_endpoints as add_system_endpoints
+from .system import resume_system_update
 from .airable import all_endpoints as all_airable_endpoints
 from .airable import add_endpoints as add_airable_endpoints
 from .recovery import all_endpoints as all_recovery_endpoints
@@ -160,6 +161,8 @@ class StrBo:
         add_network_config_endpoints()
 
         log.info('Up and running')
+
+        resume_system_update()
 
     def close(self):
         """Shut down API."""

@@ -239,10 +239,7 @@ class DeviceInfo(Endpoint):
         if strbo_update_launched:
             # we still need the working directory and need to monitor it for
             # changes
-            self.strbo_update_monitor = \
-                strbo.update_strbo.UpdateMonitor(
-                        workdir, start=True,
-                        on_done=lambda status: self.on_update_done(status))
+            self.start_update_monitor(workdir)
             return Response(status=202)
 
         try:
@@ -252,6 +249,13 @@ class DeviceInfo(Endpoint):
             return Response(status=500)
 
         return Response(status=200)
+
+    def start_update_monitor(self, workdir):
+        if self.strbo_update_monitor is None:
+            self.strbo_update_monitor = \
+                strbo.update_strbo.UpdateMonitor(
+                        workdir, start=True,
+                        on_done=lambda status: self.on_update_done(status))
 
     def on_update_done(self, status):
         workdir = self.strbo_update_monitor.get_workdir()
@@ -271,12 +275,11 @@ class DeviceInfo(Endpoint):
             # few seconds
             time.sleep(5)
 
-            if _try_launch_strbo_update_process(
-                    {'plan_file': str(workdir / 'rest_update.plan')}, workdir):
-                self.strbo_update_monitor = \
-                    strbo.update_strbo.UpdateMonitor(
-                            workdir, start=True,
-                            on_done=lambda st: self.on_update_done(st))
+            if _try_launch_strbo_update_process({
+                        'plan_file': str(workdir / 'rest_update.plan'),
+                        'keep_existing_updata_script': True,
+                    }, workdir):
+                self.start_update_monitor(workdir)
         elif status is strbo.update_strbo.UpdateStatus.FAILED_SECOND_TIME:
             log.error('Streaming Board update failed completely')
 
@@ -534,3 +537,17 @@ all_endpoints = [
 def add_endpoints():
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
+
+
+def resume_system_update():
+    workdir = Directories.get('update_workdir')
+    if not workdir.exists():
+        return
+
+    log.info('Update working directory exists, try resuming update')
+    _try_launch_strbo_update_process({
+            'plan_file': str(workdir / 'rest_update.plan'),
+            'keep_existing_updata_script': True,
+        }, workdir)
+
+    system_endpoint.devices.device_infos.start_update_monitor(workdir)

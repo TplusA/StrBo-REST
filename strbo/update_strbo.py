@@ -31,7 +31,7 @@ from .utils import get_logger
 log = get_logger()
 
 
-def _execute_update_plan(plan_file, lockfile):
+def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
     """Generate a script which executes the update plan on its own, and run it.
 
     The script works independently of the REST API so that the REST API itself
@@ -45,35 +45,66 @@ def _execute_update_plan(plan_file, lockfile):
     API, and some startup script can find out out the update process is doing.
     """
 
-    tfile = Path('/usr/share/updata/updata_system_update.template.sh')
     workdir = Directories.get('update_workdir')
     shfile = workdir / 'system_update.sh'
 
-    try:
-        shfile.unlink()
-    except FileNotFoundError:
-        pass
+    if not shfile.exists() or not keep_existing_script:
+        if shfile.exists():
+            log.info('Replacing existing system update script')
 
-    with tfile.open('r') as tf:
-        with shfile.open('w') as sh:
-            for line in tf.readlines():
-                line = line \
-                        .replace('@THE_PLAN@', str(plan_file)) \
-                        .replace('@STAMP_DIR@', str(workdir)) \
-                        .replace('@ALLOW_EXECUTION@', 'yes')
-                sh.write(line)
+        tfile = Path('/usr/share/updata/updata_system_update.template.sh')
 
-    shfile.chmod(0o775)
+        try:
+            shfile.unlink()
+        except FileNotFoundError:
+            pass
+
+        with tfile.open('r') as tf:
+            with shfile.open('w') as sh:
+                for line in tf.readlines():
+                    line = line \
+                            .replace('@THE_PLAN@', str(plan_file)) \
+                            .replace('@STAMP_DIR@', str(workdir)) \
+                            .replace('@ALLOW_EXECUTION@', 'yes')
+                    sh.write(line)
+
+        shfile.chmod(0o775)
+
+    if (workdir / 'update_failure_again').exists():
+        (workdir / 'update_started').touch()
+        (workdir / 'update_done').touch()
+        lockfile.unlink()
+        return
 
     lockfile.unlink()
 
-    if Helpers.invoke('updata_execute', str(shfile), str(workdir)) != 0:
+    if Helpers.invoke('updata_execute', str(shfile), str(workdir)) == 0:
+        return
+
+    if plan_file.exists():
         plan = json.load(plan_file.open('r'))
         log.error('Executing plan FAILED: {}'.format(plan))
         plan_file.unlink()
-        with (workdir / 'update_failure').open('w') as f:
-            print('REST API failed to execute system updater script', file=f)
-        (workdir / 'update_failure_again').touch()
+
+    file = workdir / 'update_failure'
+    try:
+        file.unlink()
+    except:  # noqa: E722
+        pass
+
+    with file.open('w') as f:
+        print('REST API failed to execute system updater script', file=f)
+
+    file = workdir / 'update_failure_again'
+    try:
+        file.unlink()
+    except:  # noqa: E722
+        pass
+
+    file.touch()
+
+    (workdir / 'update_started').touch()
+    (workdir / 'update_done').touch()
 
 
 _update_name_to_cmdline_arg = {
@@ -146,7 +177,8 @@ def update(request, lockfile):
         _execute_update_plan(pf, lockfile)
     elif 'plan_file' in request:
         # update plan stored on file in our local file system
-        _execute_update_plan(Path(request['plan_file']), lockfile)
+        _execute_update_plan(Path(request['plan_file']), lockfile,
+                             request.get('keep_existing_updata_script', False))
     else:
         log.warning('Don\'t know what to do for StrBo update request')
 
@@ -201,6 +233,7 @@ class UpdateMonitor(Thread):
                  .format(self._workdir))
 
         status = UpdateStatus.ABORTED
+        log_counter = 0
 
         while self._running:
             if not self._workdir.exists():
@@ -215,6 +248,12 @@ class UpdateMonitor(Thread):
                 continue
 
             if not (self._workdir / 'update_done').exists():
+                if log_counter == 0:
+                    log.info('StrBo Update: Not finished yet')
+                    log_counter = 4
+                else:
+                    log_counter -= 1
+
                 time.sleep(3)
                 continue
 
@@ -247,6 +286,7 @@ class UpdateMonitor(Thread):
                 log.info('StrBo Update: Complete')
                 status = UpdateStatus.SUCCESS
             else:
+                log.info('StrBo Update: Nearly finished')
                 time.sleep(1)
                 continue
 
