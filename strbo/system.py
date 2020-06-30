@@ -221,7 +221,7 @@ class DeviceInfo(Endpoint):
 
         strbo_update_launched = False
 
-        for r in request.json.get('update', []):
+        for r in req.get('update', []):
             sw_id = r.get('id', None)
             if sw_id is None:
                 continue
