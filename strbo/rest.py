@@ -27,6 +27,8 @@ from werkzeug.wrappers import Request
 from werkzeug.http import parse_options_header
 from json import loads
 from json.decoder import JSONDecodeError
+import traceback
+import sys
 
 from .system import all_endpoints as all_system_endpoints
 from .system import add_endpoints as add_system_endpoints
@@ -41,7 +43,7 @@ from .network import add_endpoints as add_network_config_endpoints
 from .dbus import Bus
 from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
 from .external import Helpers, Tools
-from .utils import get_logger, jsonify
+from .utils import get_logger, jsonify, jsonify_error
 log = get_logger()
 
 
@@ -145,10 +147,13 @@ class JSONRequest(Request):
 class StrBo:
     """Our WSGI application."""
 
-    def __init__(self):
+    def __init__(self, root_dir, debug=False):
         self.lock = Lock()
         self.is_monitor_started = False
         self.entry_point = EntryPoint()
+        self.root_dir = root_dir
+        self.traceback_replace_prefix = '  File "{}'.format(self.root_dir)
+        self.debug = debug
 
         Helpers.set_logger(log)
         Tools.set_logger(log)
@@ -198,7 +203,40 @@ class StrBo:
             self._start_monitor(environ.get('SERVER_PORT', None))
 
         request = JSONRequest(environ)
-        response = dispatch(request)
+
+        try:
+            response = dispatch(request)
+        except BaseException as e:
+            ex_type, ex_val, ex_tb = sys.exc_info()
+
+            try:
+                exception_type_name = str(ex_type).split("'")[1]
+            except:  # noqa: E722
+                exception_type_name = str(ex_type)
+
+            if exception_type_name.startswith('werkzeug.exceptions.'):
+                response = e.get_response()
+            elif self.debug:
+                raise
+            else:
+                trace = [
+                    line[:8] + line[9 + len(self.root_dir):]
+                    if line.startswith(self.traceback_replace_prefix) else line
+                    for line in traceback.format_exception(ex_type, ex_val,
+                                                           ex_tb)
+                ]
+
+                response = jsonify_error(
+                        request.path, log, True, 500, str(ex_val),
+                        error='exception',
+                        exception_type=exception_type_name,
+                        exception_trace=trace)
+
+                log.critical('>>>>> Trace to unhandled exception <<<<<')
+                for line in trace:
+                    log.critical('{}'.format(line))
+                log.critical('>>>>> End of trace <<<<<')
+
         return response(environ, start_response)
 
     def __call__(self, environ, start_response):

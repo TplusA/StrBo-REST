@@ -56,7 +56,7 @@ monitor = None
 app = None
 
 
-def init(path_to_helpers):
+def init(path_to_helpers, debug=False):
     """Initialize this module.
 
     Must be called before doing anything with the :mod:`strbo` module.
@@ -69,5 +69,7 @@ def init(path_to_helpers):
     # create the shared D-Bus instance
     Bus()
 
+    root_dir = path_to_helpers[:path_to_helpers.rfind('/')]
+
     global app
-    app = StrBo()
+    app = StrBo(root_dir, debug)

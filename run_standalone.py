@@ -23,7 +23,7 @@
 from werkzeug.serving import run_simple
 
 from strbo import init
-init('/var/local/data/rest/helpers')
+init('/var/local/data/rest/helpers', True)
 
 from strbo import app  # noqa: E402
 run_simple('0.0.0.0', 5000, app,
