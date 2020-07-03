@@ -27,7 +27,7 @@ from zlib import adler32
 import halogen
 
 from .endpoint import Endpoint, EmptyError, register_endpoints
-from .utils import jsonify_e, jsonify_nc, jsonify_simple
+from .utils import jsonify_e, jsonify_nc, jsonify_simple, jsonify_error
 from .utils import if_none_match
 from .utils import get_logger
 from . import monitor
@@ -139,27 +139,25 @@ class Credentials(Endpoint):
                     if not username:
                         raise ValueError('Empty user name')
             except Exception as e:
-                return Response('Exception: ' + str(e), status=400)
+                return jsonify_error(request, log, True, 400,
+                                     'Exception: ' + str(e))
 
             # update credentials database
-            try:
-                wcred_iface = strbo.dbus.Interfaces.credentials_write()
-                login_iface = strbo.dbus.Interfaces.airable()
+            wcred_iface = strbo.dbus.Interfaces.credentials_write()
+            login_iface = strbo.dbus.Interfaces.airable()
 
-                LOGIN_LOGOUT_ACTOR_ID = 3
+            LOGIN_LOGOUT_ACTOR_ID = 3
 
-                if userpass:
-                    wcred_iface.SetCredentials(id, username, password, True)
-                    login_iface.ExternalServiceLogout(
-                        id, "", True, LOGIN_LOGOUT_ACTOR_ID)
-                    login_iface.ExternalServiceLogin(
-                        id, username, True, LOGIN_LOGOUT_ACTOR_ID)
-                else:
-                    wcred_iface.DeleteCredentials(id, "")
-                    login_iface.ExternalServiceLogout(
-                        id, "", True, LOGIN_LOGOUT_ACTOR_ID)
-            except Exception as e:
-                return Response('Exception: ' + str(e), status=500)
+            if userpass:
+                wcred_iface.SetCredentials(id, username, password, True)
+                login_iface.ExternalServiceLogout(
+                    id, "", True, LOGIN_LOGOUT_ACTOR_ID)
+                login_iface.ExternalServiceLogin(
+                    id, username, True, LOGIN_LOGOUT_ACTOR_ID)
+            else:
+                wcred_iface.DeleteCredentials(id, "")
+                login_iface.ExternalServiceLogout(
+                    id, "", True, LOGIN_LOGOUT_ACTOR_ID)
 
         return Response(status=204)
 
