@@ -31,7 +31,7 @@ import time
 import strbo.update_strbo
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Files, Directories
-from .utils import jsonify_e
+from .utils import jsonify_e, jsonify_error
 from .utils import if_none_match
 from .utils import get_logger
 from .utils import remove_directory
@@ -191,7 +191,8 @@ class DeviceInfo(Endpoint):
 
             workdir = Directories.get('update_workdir', True)
             if not workdir.exists():
-                return Response(status=500)
+                return jsonify_error(request, log, True, 500,
+                                     'Failed creating work directory')
 
         # we end up here in case a ``POST`` request was sent and the
         # ``update_workdir`` has just been created
@@ -218,7 +219,8 @@ class DeviceInfo(Endpoint):
             except Exception as e:
                 log.error('Failed removing directory {}: {}'
                           .format(workdir, e))
-            return Response('JSON object missing', status=400)
+            return jsonify_error(request, log, False, 400,
+                                 'JSON object missing')
 
         strbo_update_launched = False
 
@@ -246,8 +248,9 @@ class DeviceInfo(Endpoint):
         try:
             workdir.rmdir()
         except Exception as e:
-            log.error('Failed removing directory {}: {}'.format(workdir, e))
-            return Response(status=500)
+            return jsonify_error(request, log, True, 500,
+                                 'Failed removing directory {}: {}'
+                                 .format(workdir, e))
 
         return Response(status=200)
 
