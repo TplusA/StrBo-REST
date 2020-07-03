@@ -28,7 +28,7 @@ from json import loads
 import halogen
 
 from .endpoint import Endpoint, register_endpoints
-from .utils import jsonify_e, jsonify_simple, if_none_match
+from .utils import jsonify_e, jsonify_simple, jsonify_error, if_none_match
 from .utils import get_logger
 import strbo.dbus
 import dbus.exceptions
@@ -743,7 +743,7 @@ class NetworkSchema(halogen.Schema):
     )
 
 
-def _do_put_network_configuration(json, service_id, nic,
+def _do_put_network_configuration(request, service_id, nic,
                                   is_for_future_service):
     if nic is None:
         raise NotFound()
@@ -751,25 +751,26 @@ def _do_put_network_configuration(json, service_id, nic,
     # input sanitation
     try:
         config_request = _ServiceConfigurationRequest.from_json(
-                                json,
+                                request.json,
                                 nic=(nic if is_for_future_service else None),
                                 is_wlan=(nic.technology == 'wifi'))
     except Exception as e:
-        return Response('Exception: ' + str(e), status=400)
+        return jsonify_error(request, log, False, 400,
+                             'Exception: ' + str(e))
 
     request_data = config_request.to_dict_for_dcpd()
     if not request_data:
-        return Response('Empty configuration request', status=400)
+        return jsonify_error(request, log, False, 400,
+                             'Empty configuration request')
 
     # send configuration request to dcpd
     try:
         iface = strbo.dbus.Interfaces.dcpd_network()
         iface.SetServiceConfiguration(service_id, jsonify_simple(request_data))
     except dbus.exceptions.DBusException as e:
-        return Response('Exception [dcpd]: ' + e.get_dbus_message(),
-                        status=500)
-    except Exception as e:
-        return Response('Exception: ' + str(e), status=500)
+        return jsonify_error(request, log, True, 500,
+                             'Exception [dcpd]: ' + e.get_dbus_message(),
+                             error='dcpd')
 
     return Response(status=204)
 
@@ -855,7 +856,7 @@ class Services(Endpoint):
                 with ep.get_all_nics() as nics:
                     nic = nics.get_nic_by_service_id(id)
                     Services._fill_in_wlan_info(nic, id, request.json)
-                    return _do_put_network_configuration(request.json, id,
+                    return _do_put_network_configuration(request, id,
                                                          nic, False)
             except AttributeError:
                 raise NotFound()
@@ -959,7 +960,7 @@ class Interfaces(Endpoint):
 
                 with ep.get_all_nics() as nics:
                     nic = nics.get_nic_by_mac(mac)
-                    return _do_put_network_configuration(request.json, '',
+                    return _do_put_network_configuration(request, '',
                                                          nic, True)
             except AttributeError:
                 raise NotFound()
@@ -1178,10 +1179,10 @@ class Network(Endpoint):
             try:
                 self._refresh()
             except dbus.exceptions.DBusException as e:
-                return Response('Exception [dcpd]: ' + e.get_dbus_message(),
-                                status=500)
-            except Exception as e:
-                return Response('Exception: ' + str(e), status=500)
+                return jsonify_error(
+                        request, log, True, 500,
+                        'Exception [dcpd]: ' + e.get_dbus_message(),
+                        error='dcpd')
 
             return jsonify_e(request, self.get_etag(), 3 * 60,
                              NetworkSchema.serialize(self))
