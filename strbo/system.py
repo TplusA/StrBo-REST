@@ -22,6 +22,7 @@
 
 from threading import RLock
 from werkzeug.wrappers import Response
+from werkzeug.exceptions import NotFound
 from zlib import adler32
 import halogen
 import configparser
@@ -204,7 +205,7 @@ class DeviceInfo(Endpoint):
         device = self.devices.get_device_by_id(id)
 
         if device is None:
-            return jsonify_e(request, self.devices.get_etag(), 20, {})
+            raise NotFound()
 
         return jsonify_e(request, self.devices.get_etag(), 12 * 3600,
                          DeviceSchema.serialize(device))

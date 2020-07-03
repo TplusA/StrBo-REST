@@ -23,6 +23,7 @@
 
 from threading import RLock
 from werkzeug.wrappers import Response
+from werkzeug.exceptions import NotFound
 from json import loads
 import halogen
 
@@ -745,7 +746,7 @@ class NetworkSchema(halogen.Schema):
 def _do_put_network_configuration(json, service_id, nic,
                                   is_for_future_service):
     if nic is None:
-        return Response(status=404)
+        raise NotFound()
 
     # input sanitation
     try:
@@ -857,7 +858,7 @@ class Services(Endpoint):
                     return _do_put_network_configuration(request.json, id,
                                                          nic, False)
             except AttributeError:
-                return Response(status=404)
+                raise NotFound()
 
     @staticmethod
     def _fill_in_wlan_info(nic, service_id, json):
@@ -883,11 +884,11 @@ class Services(Endpoint):
             nic = nics.get_nic_by_service_id(id)
             service = nic.get_service_by_id(id) if nic else None
 
-            if service is None:
-                return jsonify_e(request, ep.get_etag(), 5 * 60, {})
-            else:
+            if service is not None:
                 return jsonify_e(request, ep.get_etag(),
                                  5 * 60, ServiceSchema.serialize(service))
+
+        raise NotFound()
 
 
 class Interfaces(Endpoint):
@@ -961,7 +962,7 @@ class Interfaces(Endpoint):
                     return _do_put_network_configuration(request.json, '',
                                                          nic, True)
             except AttributeError:
-                return Response(status=404)
+                raise NotFound()
 
     @staticmethod
     def _handle_http_get(request, mac, ep):
@@ -972,12 +973,12 @@ class Interfaces(Endpoint):
         with ep.get_all_nics() as nics:
             nic = nics.get_nic_by_mac(mac)
 
-            if nic is None:
-                return jsonify_e(request, ep.get_etag(), 5 * 60, {})
-            else:
+            if nic is not None:
                 return jsonify_e(request, ep.get_etag(),
                                  nic.get_max_age(),
                                  NICSchema.serialize(nic))
+
+        raise NotFound()
 
 
 def _mk_service_config(config):
