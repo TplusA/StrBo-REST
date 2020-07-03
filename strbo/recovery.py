@@ -35,7 +35,8 @@ import dbus
 
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Tools, Files, Directories, Helpers
-from .utils import jsonify_e, jsonify_nc, if_none_match, mk_error_object
+from .utils import jsonify_e, jsonify_nc, if_none_match
+from .utils import jsonify_error, mk_error_object
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import is_mountpoint
@@ -1404,7 +1405,8 @@ class SystemReboot(Endpoint):
     def __call__(self, request, **values):
         req = request.json
         if not req:
-            return Response('JSON object missing', status=400)
+            return jsonify_error(request, log, False, 400,
+                                 'JSON object missing')
 
         keep_user_data = req.get('keep_user_data', False)
         request = req.get('request', None)
@@ -1421,9 +1423,11 @@ class SystemReboot(Endpoint):
 
             if request != 'Please kindly recover the system: ' \
                           'I really know what I am doing':
-                return Response('Request blocked', status=403)
+                return jsonify_error(request, log, False, 403,
+                                     'Request blocked')
         except Exception as e:
-            return Response('Exception: ' + str(e), status=400)
+            return jsonify_error(request, log, True, 400,
+                                 'Exception: ' + str(e))
 
         boot_config = \
             Directories.get('recovery_system_config') / \
@@ -1451,8 +1455,8 @@ class SystemReboot(Endpoint):
             manager.StartUnit('recovery.target', 'isolate')
             return Response()
         except Exception as e:
-            log.error('Reboot failed: {}'.format(e))
-            return Response('Exception: ' + str(e), status=400)
+            return jsonify_error(request, log, True, 400,
+                                 'Reboot failed due to exception: ' + str(e))
 
 
 data_status_endpoint = DStatus()
