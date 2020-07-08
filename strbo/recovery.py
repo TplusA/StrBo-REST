@@ -40,7 +40,7 @@ from .utils import jsonify_error, mk_error_object
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import is_mountpoint
-from .utils import remove_directory
+from .utils import remove_directory, remove_file
 from .utils import get_logger
 log = get_logger()
 
@@ -1437,10 +1437,7 @@ class SystemReboot(Endpoint):
             with boot_config.open('w') as f:
                 f.write('KEEP_USER_DATA="yes"\n')
         else:
-            try:
-                boot_config.unlink()
-            except FileNotFoundError:
-                pass
+            remove_file(boot_config)
 
         log.info('Rebooting into recovery system {}'
                  .format('(preserving user data)' if keep_user_data

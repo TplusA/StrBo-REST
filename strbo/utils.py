@@ -25,6 +25,7 @@ from werkzeug.wrappers import Request, BaseRequest, Response
 import json
 import logging
 import logging.handlers
+import sys
 
 from .external import Tools, Helpers
 
@@ -135,6 +136,26 @@ def remove_directory(dir, remove_dir=True):
 
     if remove_dir:
         dir.rmdir()
+
+
+def remove_file_3_8(f):
+    f.unlink(True)
+
+
+def remove_file_3_7(f):
+    try:
+        f.unlink()
+    except FileNotFoundError:
+        pass
+
+
+remove_file = None
+
+if sys.version_info.major > 3 or \
+        (sys.version_info.major == 3 and sys.version_info.minor >= 8):
+    remove_file = remove_file_3_8
+else:
+    remove_file = remove_file_3_7
 
 
 def request_accepts_json(request):

@@ -27,7 +27,7 @@ import json
 import time
 
 from .external import Directories, Tools, Helpers
-from .utils import get_logger
+from .utils import get_logger, remove_file
 log = get_logger()
 
 
@@ -54,10 +54,7 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
 
         tfile = Path('/usr/share/updata/updata_system_update.template.sh')
 
-        try:
-            shfile.unlink()
-        except FileNotFoundError:
-            pass
+        remove_file(shfile)
 
         with tfile.open('r') as tf:
             with shfile.open('w') as sh:
@@ -87,20 +84,13 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
         plan_file.unlink()
 
     file = workdir / 'update_failure'
-    try:
-        file.unlink()
-    except:  # noqa: E722
-        pass
+    remove_file(file)
 
     with file.open('w') as f:
         print('REST API failed to execute system updater script', file=f)
 
     file = workdir / 'update_failure_again'
-    try:
-        file.unlink()
-    except:  # noqa: E722
-        pass
-
+    remove_file(file)
     file.touch()
 
     (workdir / 'update_started').touch()
@@ -147,8 +137,7 @@ def _perform_parameterized_update(request, lockfile):
 
     log.error('Failed generating upgrade plan')
 
-    if pf.exists():
-        pf.unlink()
+    remove_file(pf)
 
 
 def update(request, lockfile):
