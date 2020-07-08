@@ -23,5 +23,20 @@ if /usr/bin/test ! -d "${STAMPDIR}"; then exit 51; fi
 chown updata:rest "${STAMPDIR}"
 chmod 775 "${STAMPDIR}"
 
+PIDFILE="${STAMPDIR}/update.pid"
+
+if test -f "${PIDFILE}"
+then
+    read -r PID <"${PIDFILE}"
+    if /usr/bin/test -d "/proc/${PID}"; then exit 52; fi
+    /bin/echo -n '' >"${PIDFILE}"
+else
+    /bin/touch "${PIDFILE}"
+fi
+
+chown updata:rest "${PIDFILE}"
+
 cd /
 su updata -c "${SCRIPT}" </dev/null >/dev/null 2>&1 &
+
+echo $! >"${PIDFILE}"

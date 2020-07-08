@@ -22,6 +22,7 @@
 
 from enum import Enum
 from werkzeug.wrappers import Request, BaseRequest, Response
+from pathlib import Path
 import json
 import logging
 import logging.handlers
@@ -156,6 +157,28 @@ if sys.version_info.major > 3 or \
     remove_file = remove_file_3_8
 else:
     remove_file = remove_file_3_7
+
+
+def is_process_running(pid_file, delete_if_not_running=True):
+    """Check if there is a process running under the pid written in the given
+    pid file.
+    """
+    pid = None
+
+    try:
+        with pid_file.open('r') as f:
+            pid = int(f.readline().strip())
+    except FileNotFoundError:
+        return False
+    except:  # noqa: 722
+        pass
+
+    running = pid is not None and (Path('/proc') / str(pid)).is_dir()
+
+    if not running and delete_if_not_running:
+        pid_file.unlink()
+
+    return running
 
 
 def request_accepts_json(request):

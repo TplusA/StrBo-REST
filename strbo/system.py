@@ -26,7 +26,6 @@ from werkzeug.exceptions import NotFound
 from zlib import adler32
 import halogen
 import configparser
-import time
 
 import strbo.update_strbo
 from .endpoint import Endpoint, url_for, register_endpoints
@@ -90,7 +89,7 @@ def _try_launch_strbo_update_process(update_req, workdir):
         log.error('Failed creating lock file: {}'.format(e))
         return False
     else:
-        strbo.update_strbo.update(update_req, lockfile)
+        strbo.update_strbo.exec_update(update_req, lockfile)
 
     try:
         lockfile.unlink()
@@ -268,27 +267,15 @@ class DeviceInfo(Endpoint):
         if status is strbo.update_strbo.UpdateStatus.SUCCESS:
             log.info('Streaming Board update done')
         elif status is strbo.update_strbo.UpdateStatus.ABORTED:
-            log.info('Streaming Board update aborted')
+            log.warning('Streaming Board update aborted')
         elif status is strbo.update_strbo.UpdateStatus.FAILED_FIRST_TIME:
-            log.warning('Restarting Streaming Board update after failure')
-
-            (workdir / 'update_started').unlink()
-            (workdir / 'update_try_restart').touch()
-
-            # maybe it was just a mishap, let's try again after waiting for a
-            # few seconds
-            time.sleep(5)
-
-            if _try_launch_strbo_update_process({
-                        'plan_file': str(workdir / 'rest_update.plan'),
-                        'keep_existing_updata_script': True,
-                    }, workdir):
-                self.start_update_monitor(workdir)
+            log.error('Streaming Board update failed')
         elif status is strbo.update_strbo.UpdateStatus.FAILED_SECOND_TIME:
             log.error('Streaming Board update failed completely')
+        elif status is strbo.update_strbo.UpdateStatus.FINAL_REBOOT_FAILED:
+            log.error('Streaming Board reboot failed after successful update')
 
-        if status is not strbo.update_strbo.UpdateStatus.FAILED_FIRST_TIME:
-            remove_directory(workdir)
+        remove_directory(workdir)
 
 
 class DevicesSchema(halogen.Schema):

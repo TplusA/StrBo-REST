@@ -22,12 +22,12 @@
 
 from pathlib import Path
 from threading import Thread
-from enum import Enum
+from enum import Enum, IntEnum
 import json
 import time
 
 from .external import Directories, Tools, Helpers
-from .utils import get_logger, remove_file
+from .utils import get_logger, is_process_running, remove_file
 log = get_logger()
 
 
@@ -67,12 +67,6 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
 
         shfile.chmod(0o775)
 
-    if (workdir / 'update_failure_again').exists():
-        (workdir / 'update_started').touch()
-        (workdir / 'update_done').touch()
-        lockfile.unlink()
-        return
-
     lockfile.unlink()
 
     if Helpers.invoke('updata_execute', str(shfile), str(workdir)) == 0:
@@ -83,18 +77,23 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
         log.error('Executing plan FAILED: {}'.format(plan))
         plan_file.unlink()
 
-    file = workdir / 'update_failure'
-    remove_file(file)
+    # create state RF with our own error message so that the
+    # :class:`UpdateMonitor` can see it
+    remove_file(workdir / 'update_failure')
+    remove_file(workdir / 'update_done')
+    remove_file(workdir / 'update_reboot_failed')
+    remove_file(workdir / 'update_reboot_stderr')
+    remove_file(workdir / 'update_reboot_started')
+    remove_file(workdir / 'update_failure_again')
 
+    (workdir / 'update_started').touch()
+
+    file = workdir / 'update_failure'
     with file.open('w') as f:
         print('REST API failed to execute system updater script', file=f)
 
-    file = workdir / 'update_failure_again'
-    remove_file(file)
-    file.touch()
-
-    (workdir / 'update_started').touch()
-    (workdir / 'update_done').touch()
+    (workdir / 'update_failure_again').touch()
+    remove_file(workdir / 'update.pid')
 
 
 _update_name_to_cmdline_arg = {
@@ -140,7 +139,7 @@ def _perform_parameterized_update(request, lockfile):
     remove_file(pf)
 
 
-def update(request, lockfile):
+def exec_update(request, lockfile):
     """Interpret update request for Streaming Board and execute it.
 
     This function tries to perform the update as requested. To this end, it
@@ -150,6 +149,10 @@ def update(request, lockfile):
     Note that UpdaTA may make use of the REST API in case the recovery system
     gets involved. Also note that UpdaTA may request a system reboot.
     """
+    if is_process_running(Directories.get('update_workdir') / 'update.pid'):
+        log.error('Failed starting update because another update process '
+                  'is already running')
+        return
 
     log.info('Updating Streaming Board: {}'.format(request))
 
@@ -180,7 +183,24 @@ class UpdateStatus(Enum):
     ABORTED = 2
     FAILED_FIRST_TIME = 3
     FAILED_SECOND_TIME = 4
-    FAILED_REBOOT = 5
+    FINAL_REBOOT_FAILED = 5
+
+
+class UpdateScriptState(IntEnum):
+    """State of update script derived from the various stamp files."""
+    INIT = 0
+    U = 1 << 0
+    US = 1 << 0 | 1 << 1
+    UR = 1 << 0 | 1 << 1 | 1 << 4
+    UR2 = 1 << 0 | 1 << 1 | 1 << 4 | 1 << 5
+    URF = 1 << 0 | 1 << 1 | 1 << 4 | 1 << 5 | 1 << 6
+    UF = 1 << 0 | 1 << 2
+    RF = 1 << 0 | 1 << 2 | 1 << 3
+    FR = 1 << 0 | 1 << 2 | 1 << 4
+    FR2 = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5
+    FRF = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5 | 1 << 6
+    NOT_RUNNING = 1 << 7
+    INVALID = 1 << 8
 
 
 class UpdateMonitor(Thread):
@@ -211,6 +231,24 @@ class UpdateMonitor(Thread):
         """Return working directory this thread is monitoring."""
         return self._workdir
 
+    def determine_script_state(self):
+        if not self._workdir.is_dir():
+            return UpdateScriptState.NOT_RUNNING
+
+        files = \
+            ((self._workdir / 'update_started').exists() << 0) | \
+            ((self._workdir / 'update_done').exists() << 1) | \
+            ((self._workdir / 'update_failure').exists() << 2) | \
+            ((self._workdir / 'update_failure_again').exists() << 3) | \
+            ((self._workdir / 'update_reboot_started').exists() << 4) | \
+            ((self._workdir / 'update_reboot_stderr').exists() << 5) | \
+            ((self._workdir / 'update_reboot_failed').exists() << 6)
+
+        try:
+            return UpdateScriptState(files)
+        except ValueError:
+            return UpdateScriptState.INVALID
+
     def run(self):
         """Method representing the thread’s activity.
 
@@ -223,22 +261,33 @@ class UpdateMonitor(Thread):
 
         status = UpdateStatus.ABORTED
         log_counter = 0
+        pid_file = self._workdir / 'update.pid'
 
         while self._running:
-            if not self._workdir.exists():
+            script_state = self.determine_script_state()
+
+            if script_state == UpdateScriptState.INVALID:
+                # ignore transients
+                log.info('StrBo Update: Invalid state (ignored)')
+                time.sleep(0.5)
+                continue
+
+            if script_state == UpdateScriptState.NOT_RUNNING:
                 log.info('StrBo Update: Work directory does not exist, '
                          'we are done here')
                 self._running = False
                 continue
 
-            if not (self._workdir / 'update_started').exists():
+            if script_state == UpdateScriptState.INIT:
                 log.info('StrBo Update: Not started yet')
+                status = UpdateStatus.SUCCESS
                 time.sleep(0.5)
                 continue
 
-            if not (self._workdir / 'update_done').exists():
+            if is_process_running(pid_file):
                 if log_counter == 0:
-                    log.info('StrBo Update: Not finished yet')
+                    log.info('StrBo Update: Not finished yet: {}'
+                             .format(script_state))
                     log_counter = 4
                 else:
                     log_counter -= 1
@@ -246,7 +295,15 @@ class UpdateMonitor(Thread):
                 time.sleep(3)
                 continue
 
-            def dump_file_as_error(f, what):
+            def dump_file_as_error(fname, what, must_exist=True):
+                try:
+                    f = (self._workdir / fname).open('r')
+                except Exception as e:
+                    if must_exist:
+                        log.error('StrBo Update: Expected error file {} '
+                                  'does not exist ({})'.format(fname, e))
+                    return
+
                 errors = f.readlines()
 
                 if errors:
@@ -256,28 +313,35 @@ class UpdateMonitor(Thread):
                     log.error('StrBo Update: No error messages logged for {}'
                               .format(what))
 
-            if (self._workdir / 'update_failure').exists():
-                log.error('StrBo Update: Failed')
-                dump_file_as_error(
-                    (self._workdir / 'update_failure').open('r'), 'update')
-
-                if (self._workdir / 'update_failure_again').exists():
-                    status = UpdateStatus.FAILED_SECOND_TIME
-                else:
-                    status = UpdateStatus.FAILED_FIRST_TIME
-            elif (self._workdir / 'update_reboot_failed').exists():
-                log.error('StrBo Update: Reboot failed')
-                dump_file_as_error(
-                    (self._workdir / 'update_reboot_failed').open('r'),
-                    'reboot')
-                status = UpdateStatus.FAILED_REBOOT
-            elif (self._workdir / 'update_reboot_done').exists():
-                log.info('StrBo Update: Complete')
-                status = UpdateStatus.SUCCESS
-            else:
-                log.info('StrBo Update: Nearly finished')
-                time.sleep(1)
+            if script_state in (UpdateScriptState.UR2, UpdateScriptState.FR2):
+                # rebooting regularly
+                log.info('StrBo Update: Expecting reboot')
+                time.sleep(2)
                 continue
+
+            if script_state is UpdateScriptState.URF:
+                # update OK, but reboot request failed
+                log.critical('StrBo Update: Reboot failed')
+                dump_file_as_error('update_reboot_failed', 'reboot')
+                status = UpdateStatus.FINAL_REBOOT_FAILED
+            elif script_state is UpdateScriptState.FRF:
+                # update failed, reboot request failed as well
+                log.critical('StrBo Update: Failed, reboot failed as well')
+                dump_file_as_error('update_failure', 'update')
+                dump_file_as_error('update_reboot_failed', 'reboot')
+                status = UpdateStatus.FAILED_FIRST_TIME
+            elif script_state is UpdateScriptState.RF:
+                # repeated failure
+                log.error('StrBo Update: Failed')
+                dump_file_as_error('update_failure', 'update')
+                status = UpdateStatus.FAILED_SECOND_TIME
+            else:
+                # update stopped in unexpected state
+                log.critical('StrBo Update: Stopped in unexpected state {}'
+                             .format(script_state))
+                dump_file_as_error('update_failure', 'update', False)
+                dump_file_as_error('update_reboot_failed', 'reboot', False)
+                status = UpdateStatus.ABORTED
 
             self._running = False
 
