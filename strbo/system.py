@@ -260,11 +260,17 @@ class DeviceInfo(Endpoint):
                         workdir, start=True,
                         on_done=lambda status: self.on_update_done(status))
 
+    def stop_update_monitor(self):
+        if self.strbo_update_monitor is not None:
+            self.strbo_update_monitor.request_stop()
+
     def on_update_done(self, status):
         workdir = self.strbo_update_monitor.get_workdir()
         self.strbo_update_monitor = None
 
-        if status is strbo.update_strbo.UpdateStatus.SUCCESS:
+        if status is strbo.update_strbo.UpdateStatus.DETACH_UPDATE_MONITOR:
+            return
+        elif status is strbo.update_strbo.UpdateStatus.SUCCESS:
             log.info('Streaming Board update done')
         elif status is strbo.update_strbo.UpdateStatus.ABORTED:
             log.warning('Streaming Board update aborted')
@@ -542,3 +548,7 @@ def resume_system_update():
         }, workdir)
 
     system_endpoint.devices.device_infos.start_update_monitor(workdir)
+
+
+def detach_from_system_update():
+    system_endpoint.devices.device_infos.stop_update_monitor()

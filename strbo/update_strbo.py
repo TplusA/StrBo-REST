@@ -179,6 +179,7 @@ class UpdateStatus(Enum):
     """Result of a Streaming Board update as observed by
     :class:`UpdateMonitor`.
     """
+    DETACH_UPDATE_MONITOR = 0
     SUCCESS = 1
     ABORTED = 2
     FAILED_FIRST_TIME = 3
@@ -199,8 +200,9 @@ class UpdateScriptState(IntEnum):
     FR = 1 << 0 | 1 << 2 | 1 << 4
     FR2 = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5
     FRF = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5 | 1 << 6
-    NOT_RUNNING = 1 << 7
-    INVALID = 1 << 8
+    DONE = 1 << 7
+    NOT_RUNNING = 1 << 8
+    INVALID = 1 << 9
 
 
 class UpdateMonitor(Thread):
@@ -217,6 +219,7 @@ class UpdateMonitor(Thread):
     def __init__(self, workdir, *, start, on_done):
         super().__init__(name='Update Progress Monitor')
         self._workdir = workdir
+        self._stop_requested = False
         self._running = True
         self._on_done = on_done
 
@@ -225,6 +228,7 @@ class UpdateMonitor(Thread):
 
     def request_stop(self):
         """Request termination of the monitoring thread."""
+        self._stop_requested = True
         self._running = False
 
     def get_workdir(self):
@@ -234,6 +238,9 @@ class UpdateMonitor(Thread):
     def determine_script_state(self):
         if not self._workdir.is_dir():
             return UpdateScriptState.NOT_RUNNING
+
+        if (self._workdir / 'update_finished').exists():
+            return UpdateScriptState.DONE
 
         files = \
             ((self._workdir / 'update_started').exists() << 0) | \
@@ -319,7 +326,10 @@ class UpdateMonitor(Thread):
                 time.sleep(2)
                 continue
 
-            if script_state is UpdateScriptState.URF:
+            if script_state is UpdateScriptState.DONE:
+                # complete and done, over and out
+                status = UpdateStatus.SUCCESS
+            elif script_state is UpdateScriptState.URF:
                 # update OK, but reboot request failed
                 log.critical('StrBo Update: Reboot failed')
                 dump_file_as_error('update_reboot_failed', 'reboot')
@@ -346,4 +356,7 @@ class UpdateMonitor(Thread):
             self._running = False
 
         if self._on_done:
-            self._on_done(status)
+            if self._stop_requested:
+                self._on_done(UpdateStatus.DETACH_UPDATE_MONITOR)
+            else:
+                self._on_done(status)
