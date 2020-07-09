@@ -199,14 +199,13 @@ class _Helper:
         self._cwd = str(cwd) if cwd else '/tmp'
 
     def invoke(self, logger, *args):
-        if logger:
-            logger.info('Executing helper {} {}'
-                        .format(self._script_name,
-                                ' '.join([str(a) for a in args])))
+        c = Tools._flatten_arglist(str(self._script_name), *args)
 
-        cmd = subprocess.Popen(
-            ['/usr/bin/sudo', str(self._script_name)] + [str(a) for a in args],
-            cwd=self._cwd, stderr=subprocess.PIPE)
+        if logger:
+            logger.info('Executing helper {}' .format(' '.join(c)))
+
+        cmd = subprocess.Popen(['/usr/bin/sudo'] + c,
+                               cwd=self._cwd, stderr=subprocess.PIPE)
 
         try:
             outs, errs = cmd.communicate(timeout=self._timeout)
