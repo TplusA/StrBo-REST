@@ -26,7 +26,7 @@ from enum import Enum, IntEnum
 import json
 import time
 
-from .external import Directories, Tools, Helpers
+from .external import Directories, Helpers
 from .utils import get_logger, is_process_running, remove_file
 log = get_logger()
 
@@ -111,7 +111,7 @@ _update_name_to_cmdline_flag = {
 
 
 def _perform_parameterized_update(request, lockfile):
-    args = []
+    args = [Directories.get('update_workdir')]
 
     for k in request.keys():
         arg = _update_name_to_cmdline_arg.get(k, None)
@@ -130,7 +130,7 @@ def _perform_parameterized_update(request, lockfile):
     args.append('--output-file')
     args.append(pf)
 
-    if Tools.invoke(15, 'updata_plan', args) == 0:
+    if Helpers.invoke('updata_plan', args) == 0:
         _execute_update_plan(pf, lockfile)
         return
 
