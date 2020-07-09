@@ -73,10 +73,14 @@ class Tools:
     """
     _external_tools = {
         # package: coreutils
-        'test':         '/bin/test',
+        'test':         '/usr/bin/test',
         'rm':           '/bin/rm',
         'readlink':     '/usr/bin/readlink',
         'dd':           '/bin/dd',
+        'touch':        '/bin/touch',
+
+        # package: shadow-base
+        'su':           '/bin/su',
 
         # package: util-linux-mountpoint
         'mountpoint':   '/bin/mountpoint',
@@ -320,4 +324,5 @@ def register_helpers(path):
                      ('rm', 'tar', 'readlink', 'test'), timeout=300)
     Helpers.register('replace_recovery_system',
                      ('mount', 'umount', 'test', 'dd'), timeout=300)
-    Helpers.register('updata_execute', ('updata_exec',), timeout=3600)
+    Helpers.register('updata_execute',
+                     ('updata_exec', 'sudo', 'su', 'touch'), timeout=3600)
