@@ -26,7 +26,6 @@ from werkzeug.utils import cached_property
 from werkzeug.wrappers import Request
 from werkzeug.http import parse_options_header
 from json import loads
-from json.decoder import JSONDecodeError
 import traceback
 import sys
 
@@ -141,7 +140,7 @@ class JSONRequest(Request):
             return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
         except UnicodeDecodeError as e:
             log.error('Failed reading JSON payload: {}'.format(e))
-        except JSONDecodeError as e:
+        except ValueError as e:
             log.error('Failed parsing JSON payload: {}'.format(e))
 
         return None
