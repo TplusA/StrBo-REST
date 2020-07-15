@@ -20,11 +20,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA  02110-1301, USA.
 
-import threading
 import dbus
-
-from dbus.mainloop.glib import DBusGMainLoop, threads_init
-from gi.repository import GLib
 
 from .utils import get_logger
 log = get_logger('D-Bus')
@@ -35,7 +31,8 @@ def _dbus_worker(dbh):
     constructor."""
     if dbh._dbus_mainloop:
         log.info('Thread running')
-        dbh._dbus_mainloop.run()
+        log.debug('Main loop ' + str(hex(dbh._dbus_mainloop)))
+        dbh._glib_handle.g_main_loop_run(dbh._dbus_mainloop)
 
     log.info('Thread terminates')
 
@@ -46,11 +43,44 @@ class DBusHandler:
     def __init__(self):
         log.debug('Init handler')
 
+        from dbus.mainloop.glib import DBusGMainLoop, threads_init
         threads_init()
         self._loop = DBusGMainLoop(set_as_default=True)
 
-        self._dbus_mainloop = GLib.MainLoop()
+        import ctypes
 
+        # So we need a GMainLoop from GLib...
+        #
+        # Since PyGObject ("gi") is a completely useless shitload of crapware
+        # that cannot seriously be used in a cross-compilation environment, we
+        # need other means of tapping into GLib. Fortunately, Python comes with
+        # the ctypes package and thus provides a really good way for ad-hoc
+        # incorporation of C library code. We simply load GLib by ourselves,
+        # pull out the few symbols we need, and use them.
+        #
+        # Using RTLD_NOLOAD makes sure that the library is *not* actually
+        # loaded, but instead the previously loaded instance is used, if any.
+        # We should end up with a handle pointing to the library dynamically
+        # linked by the lines above to set up dbus. If not, then there is a
+        # general problem that we cannot solve here anyway; in this case, we'll
+        # just run into an exception a few lines later and be done with it.
+        from os import RTLD_NOLOAD
+        glib = ctypes.CDLL('libglib-2.0.so.0',
+                           mode=ctypes.RTLD_GLOBAL | RTLD_NOLOAD)
+
+        log.debug('GLib handle: ' + str(glib))
+        glib.g_main_loop_new.argtypes = [ctypes.c_void_p, ctypes.c_bool]
+        glib.g_main_loop_new.restype = ctypes.c_void_p
+        glib.g_main_loop_unref.argtypes = [ctypes.c_void_p]
+        glib.g_main_loop_unref.restype = None
+        glib.g_main_loop_run.argtypes = [ctypes.c_void_p]
+        glib.g_main_loop_run.restype = None
+        glib.g_main_loop_quit.argtypes = [ctypes.c_void_p]
+        glib.g_main_loop_quit.restype = None
+        self._glib_handle = glib
+        self._dbus_mainloop = glib.g_main_loop_new(None, False)
+
+        import threading
         self._dbus_thread = threading.Thread(name='D-Bus worker',
                                              target=_dbus_worker,
                                              args=(self,))
@@ -63,7 +93,8 @@ class DBusHandler:
             log.warning('Cannot stop D-Bus, already stopped')
             return
 
-        self._dbus_mainloop.quit()
+        self._glib_handle.g_main_loop_quit(self._dbus_mainloop)
+        self._glib_handle.g_main_loop_unref(self._dbus_mainloop)
         self._dbus_mainloop = None
         self._dbus_thread = None
         self._loop = None
