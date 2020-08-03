@@ -35,6 +35,7 @@ class Directories:
     _external_directories = {
         'sysconfdir': Path('/etc'),
         'localsysconfdir': Path('/var/local/etc'),
+        'datadir': Path('/usr/share'),
         'gpg_home': Path('/var/local/etc/strbo-rest.gnupg'),
         'update_workdir': Path('/var/local/data/system_update_data'),
         'recovery_data_workdir': Path('/var/local/data/recovery_data_update'),
@@ -195,6 +196,9 @@ class Files:
             'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
         'strbo-release': Directories.get('sysconfdir') / 'strbo-release',
         'appliance.ini': Directories.get('localsysconfdir') / 'appliance.ini',
+        'updata_script_template':
+            Directories.get('datadir') /
+            'updata/updata_system_update.template.sh',
     }
 
     @staticmethod

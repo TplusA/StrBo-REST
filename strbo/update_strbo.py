@@ -26,7 +26,7 @@ from enum import Enum, IntEnum
 import json
 import time
 
-from .external import Directories, Helpers
+from .external import Directories, Files, Helpers
 from .utils import get_logger, is_process_running, remove_file
 log = get_logger()
 
@@ -52,7 +52,7 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
         if shfile.exists():
             log.info('Replacing existing system update script')
 
-        tfile = Path('/usr/share/updata/updata_system_update.template.sh')
+        tfile = Files.get('updata_script_template')
 
         remove_file(shfile)
 
