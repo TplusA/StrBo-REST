@@ -84,7 +84,7 @@ class Tools:
         'su':           '/bin/su',
 
         # package: util-linux-mountpoint
-        'mountpoint':   '/bin/mountpoint',
+        'mountpoint':   '/usr/bin/mountpoint',
 
         # package: util-linux-mount
         'mount':        '/bin/mount',
