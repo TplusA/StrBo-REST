@@ -238,7 +238,7 @@ class _Helper:
             else:
                 logger.error('Helper {} exit code {}'
                              .format(self._script_name, cmd.returncode))
-                logger.error('Helper stderr: {}'.format(errs))
+                logger.error('Helper stderr: {}'.format(errs.decode('utf-8')))
 
         return cmd.returncode
 
