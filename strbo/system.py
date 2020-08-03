@@ -343,8 +343,6 @@ class Devices(Endpoint):
         'unknown': ('*** UNKNOWN DEVICE ***', None),
         'strbo': ('T+A Streaming Board Appliance', None),
         'R1000E': ('T+A R 1000 E', {
-            'update': {'description': 'Update Package',
-                       'supports_update': True},
             'main_bootloader': {'description': 'Application CPU Bootloader'},
             'main_application': {'description': 'Application CPU Main'},
             'dab_fm': {'description': 'DAB/FM Module'},
