@@ -407,7 +407,7 @@ class Devices(Endpoint):
 
             # add the appliance we are living in
             cfg = configparser.ConfigParser()
-            cfg.read(Files.get('appliance.ini'))
+            cfg.read(str(Files.get('appliance.ini')))
             try:
                 device_id = cfg['appliance']['id']
             except KeyError:
