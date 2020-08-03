@@ -111,6 +111,17 @@ class Tools:
     _logger = None
 
     @staticmethod
+    def check_external_tools():
+        """Check if there are any tools missing"""
+        missing = []
+        for t in Tools._external_tools:
+            if not Path(Tools._external_tools[t]).exists():
+                missing.append(t)
+
+        if missing:
+            raise RuntimeError('Missing tools: {}'.format(', '.join(missing)))
+
+    @staticmethod
     def set_logger(logger):
         """Set logger instance for logging tool invocations."""
         Tools._logger = logger
@@ -327,3 +338,4 @@ def register_helpers(path):
     Helpers.register('updata_plan', ('updata_plan', 'sudo', 'su'), timeout=15)
     Helpers.register('updata_execute',
                      ('updata_exec', 'sudo', 'su', 'touch'), timeout=3600)
+    Tools.check_external_tools()
