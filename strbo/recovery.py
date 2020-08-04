@@ -1409,20 +1409,20 @@ class SystemReboot(Endpoint):
                                  'JSON object missing')
 
         keep_user_data = req.get('keep_user_data', False)
-        request = req.get('request', None)
+        magic = req.get('request', None)
 
         try:
-            if request is None:
+            if magic is None:
                 raise TypeError('Request missing')
 
-            if not isinstance(request, str):
+            if not isinstance(magic, str):
                 raise TypeError('Request must be string')
 
             if not isinstance(keep_user_data, bool):
                 raise TypeError('Parameter keep_user_data must be bool')
 
-            if request != 'Please kindly recover the system: ' \
-                          'I really know what I am doing':
+            if magic != 'Please kindly recover the system: ' \
+                        'I really know what I am doing':
                 return jsonify_error(request, log, False, 403,
                                      'Request blocked')
         except Exception as e:
