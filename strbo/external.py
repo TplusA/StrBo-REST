@@ -190,10 +190,9 @@ class Files:
     dependencies on packages containing the files listed in this class.
     """
     _external_files = {
-        # package: signing-keys-packagefeed
+        # package: opkg-keyrings
         'gpg_key':
-            Directories.get('sysconfdir') /
-            'pki/packagefeed-gpg/PACKAGEFEED-GPG-KEY-strbo-main-V2',
+            Directories.get('datadir') / 'opkg/keyrings/key-93CD60C9.gpg',
         'strbo-release': Directories.get('sysconfdir') / 'strbo-release',
         'appliance.ini': Directories.get('localsysconfdir') / 'appliance.ini',
         'updata_script_template':
