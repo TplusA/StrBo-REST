@@ -70,6 +70,7 @@ class EntryPointSchema(halogen.Schema):
     api_version = halogen.Attr({
         'major': 0,
         'minor': 8,
+        'variant': 'V1',
     })
 
     #: TCP port of the event monitor. Field may be missing in case the
