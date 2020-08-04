@@ -213,7 +213,7 @@ def mk_error_object(request_or_href, log, is_crit, message, *args, **kwargs):
     ``error`` and ``error_message``. Any other fields may be added to the
     object through either ``args`` or ``kwargs``.
 
-    The presences of the ``error`` field tells the receiver that what he has is
+    The presence of the ``error`` field tells the receiver that what he has is
     an error object. Its value specifies the kind of error and may be passed as
     parameter to this function to override its default value, ``plain``.
 
