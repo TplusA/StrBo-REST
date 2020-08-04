@@ -534,7 +534,9 @@ def _replace_recovery_system_data(request, status):
         status.set_step_name('verifying signature')
 
         gpghome = Directories.get('gpg_home')
-        gpghome.mkdir(mode=0o700, exist_ok=True)
+
+        if not gpghome.exists():
+            gpghome.mkdir(mode=0o700)
 
         if Tools.invoke_cwd(gpgfile.parent, 15,
                             'gpg', '--homedir', gpghome,
@@ -1100,7 +1102,9 @@ def _replace_recovery_system(request, status):
         status.set_step_name('verifying signature')
 
         gpghome = Directories.get('gpg_home')
-        gpghome.mkdir(mode=0o700, exist_ok=True)
+
+        if not gpghome.exists():
+            gpghome.mkdir(mode=0o700)
 
         if Tools.invoke_cwd(gpgfile.parent, 15,
                             'gpg', '--homedir', gpghome,
