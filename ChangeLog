@@ -1,3 +1,31 @@
+2020-08-04  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.8 released.
+
+	* System management: Add endpoints for managing T+A HiFi system
+	  components, including per-device version information and update
+	  facilities.
+
+	* Updates: Software update requests can be POSTed to Streaming Board
+	  system component. This facility is used by dcpd v5.8 and later, but
+	  it is open and may later be used by our app or some web frontend.
+
+	  This part relies on UpdaTA, the T+A system updater. The REST API
+	  provides a wrapper and monitoring around the updater, the actual
+	  work is done by UpdaTA itself.
+
+	* API: Reply with specific error JSON objects on errors, try to get
+	  error reporting done the right way everywhere.
+
+	* General: Reestablished compatibility with Python 3.4 for V1
+	  Streaming Board releases.
+
+	* Misc: Catch all uncaught exceptions raise in the core and turn them
+	  into JSON error objects including a trace to the location of error.
+	  This is going to be helpful for debugging.
+
+	* Misc: Many bugfixes.
+
 2020-05-22  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.7 released.

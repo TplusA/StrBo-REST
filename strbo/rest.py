@@ -68,7 +68,7 @@ class EntryPointSchema(halogen.Schema):
 
     #: The API version. Not a very RESTful thing to do, but might become
     #: handy at some time.
-    api_version = halogen.Attr({'major': 0, 'minor': 7})
+    api_version = halogen.Attr({'major': 0, 'minor': 8})
 
     #: TCP port of the event monitor. Field may be missing in case the
     #: monitor has not been started.
