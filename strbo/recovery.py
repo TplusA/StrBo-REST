@@ -32,6 +32,7 @@ import halogen
 import re
 import shlex
 import dbus
+import dbus.exceptions
 
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Tools, Files, Directories, Helpers
@@ -1451,8 +1452,16 @@ class SystemReboot(Endpoint):
                                      'org.freedesktop.systemd1.Manager')
             manager.StartUnit('recovery.target', 'isolate')
             return Response()
+        except dbus.exceptions.DBusException as e:
+            etype = str(e).split(':', 1)[0]
+            code = 501 if etype == 'org.freedesktop.DBus.Error.' \
+                                   'InteractiveAuthorizationRequired' else 500
+            return jsonify_error(request, log, True, code,
+                                 'Reboot failed due to D-Bus exception: ' +
+                                 e.get_dbus_message(),
+                                 error='dbus')
         except Exception as e:
-            return jsonify_error(request, log, True, 400,
+            return jsonify_error(request, log, True, 500,
                                  'Reboot failed due to exception: ' + str(e))
 
 
