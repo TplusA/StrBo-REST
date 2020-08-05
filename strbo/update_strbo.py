@@ -130,11 +130,14 @@ def _perform_parameterized_update(request, lockfile):
     args.append('--output-file')
     args.append(pf)
 
-    if Helpers.invoke('updata_plan', args) == 0:
-        _execute_update_plan(pf, lockfile)
-        return
-
-    log.error('Failed generating upgrade plan')
+    try:
+        if Helpers.invoke('updata_plan', args) == 0:
+            _execute_update_plan(pf, lockfile)
+            return
+    except Exception as e:
+        log.error('Failed generating upgrade plan: {}'.format(e))
+    else:
+        log.error('Failed generating upgrade plan')
 
     remove_file(pf)
 
