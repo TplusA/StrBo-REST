@@ -1,3 +1,17 @@
+2020-08-05  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.9 released.
+
+	* Updates: Increase timeouts for UpdaTA wrappers. Planning phase takes
+	  around 30 seconds on CM1, so 15 seconds was way too short. Timeouts
+	  for both, planning and execution phases, have been significantly
+	  increased to take very slow network connections (as per year 2020
+	  standards) into account.
+
+	* Helpers: Fix killing of helpers which take too long time to
+	  complete. We must use sudo in this case because the helpers are
+	  started with sudo as well.
+
 2020-08-04  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.8 released.
