@@ -350,7 +350,7 @@ def register_helpers(path):
                      ('rm', 'tar', 'readlink', 'test'), timeout=300)
     Helpers.register('replace_recovery_system',
                      ('mount', 'umount', 'test', 'dd'), timeout=300)
-    Helpers.register('updata_plan', ('updata_plan', 'sudo', 'su'), timeout=15)
+    Helpers.register('updata_plan', ('updata_plan', 'sudo', 'su'), timeout=600)
     Helpers.register('updata_execute',
-                     ('updata_exec', 'sudo', 'su', 'touch'), timeout=3600)
+                     ('updata_exec', 'sudo', 'su', 'touch'), timeout=8*60*60)
     Tools.check_external_tools()
