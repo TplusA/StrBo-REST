@@ -80,6 +80,9 @@ class Tools:
         'dd':           '/bin/dd',
         'touch':        '/bin/touch',
 
+        # package: procps
+        'kill':         '/bin/kill',
+
         # package: shadow-base
         'su':           '/bin/su',
 
@@ -223,13 +226,21 @@ class _Helper:
         if logger:
             logger.info('Executing helper {}' .format(' '.join(c)))
 
-        cmd = subprocess.Popen(['/usr/bin/sudo'] + c,
-                               cwd=self._cwd, stderr=subprocess.PIPE)
+        cmd = subprocess.Popen([Tools.get('sudo')] + c,
+                               cwd=self._cwd, stderr=subprocess.PIPE,
+                               preexec_fn=os.setpgrp)
+        try:
+            pgid = os.getpgid(cmd.pid)
+        except:  # noqa: E722
+            pgid = None
 
         try:
             outs, errs = cmd.communicate(timeout=self._timeout)
         except subprocess.TimeoutExpired:
-            cmd.kill()
+            if pgid:
+                subprocess.call(' '.join([Tools.get('sudo'), Tools.get('kill'),
+                                          str(pgid)]),
+                                shell=True)
             outs, errs = cmd.communicate()
 
         if logger:
