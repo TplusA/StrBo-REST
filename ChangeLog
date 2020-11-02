@@ -1,3 +1,9 @@
+2020-11-02  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.10 released.
+
+	* Network: Fix read-out of network configuration.
+
 2020-08-05  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.9 released.
