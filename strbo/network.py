@@ -1121,6 +1121,8 @@ def _fill_in_data_from_dcpd(all_nics, network_configuration):
                 if service:
                     all_nics.add_service(service)
 
+    return True
+
 
 class Network(Endpoint):
     """**API Endpoint** - Network configuration.
