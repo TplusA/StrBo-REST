@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -27,6 +27,7 @@ from threading import RLock
 from werkzeug.wrappers import Response
 from werkzeug.datastructures import FileStorage
 from urllib.request import urlopen
+from urllib.error import URLError
 from zlib import adler32
 import halogen
 import re
@@ -527,8 +528,11 @@ def _replace_recovery_system_data(request, status):
         elif file_from_form:
             file_from_form.save(str(gpgfile))
         else:
-            log.error('No recovery data file specified')
-            raise Exception('No data file specified')
+            error = mk_error_object(request, log, False,
+                                    'No recovery data file specified')
+            return jsonify_nc(request,
+                              result='error', reason='no image data',
+                              error_object=error)
 
         log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
@@ -636,6 +640,12 @@ def _replace_recovery_system_data(request, status):
             log.error('Replacing recovery data FAILED')
 
         return result
+    except URLError as e:
+        error = mk_error_object(
+                request, log, False,
+                'Failed downloading recovery data: {}'.format(e))
+        return jsonify_nc(request, result='error', reason='download error',
+                          error_object=error)
     except Exception as e:
         log.error('Replacing recovery data FAILED: {}'.format(e))
 
@@ -1095,8 +1105,11 @@ def _replace_recovery_system(request, status):
         elif file_from_form:
             file_from_form.save(str(gpgfile))
         else:
-            log.error('No recovery system file specified')
-            raise Exception('No recovery system file specified')
+            error = mk_error_object(request, log, False,
+                                    'No recovery system file specified')
+            return jsonify_nc(request,
+                              result='error', reason='no image data',
+                              error_object=error)
 
         log.info('Verifying recovery system signature')
         status.set_step_name('verifying signature')
@@ -1109,7 +1122,7 @@ def _replace_recovery_system(request, status):
         if Tools.invoke_cwd(gpgfile.parent, 15,
                             'gpg', '--homedir', gpghome,
                             '--import', Files.get('gpg_key')) != 0:
-            error = mk_error_object(request, log, True,
+            error = mk_error_object(request, log, False,
                                     'Failed to import GPG public key')
             return jsonify_nc(request,
                               result='error', reason='no public key',
@@ -1193,6 +1206,12 @@ def _replace_recovery_system(request, status):
             log.error('Replacing recovery system FAILED')
 
         return result
+    except URLError as e:
+        error = mk_error_object(
+                request, log, False,
+                'Failed downloading recovery system: {}'.format(e))
+        return jsonify_nc(request, result='error', reason='download error',
+                          error_object=error)
     except Exception as e:
         log.error('Replacing recovery system FAILED: {}'.format(e))
 
