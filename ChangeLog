@@ -1,3 +1,12 @@
+2021-03-10  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.11 released.
+
+	* Updates: Error propagation and proper use of HTTP status codes in
+	  update and recovery endpoints.
+
+	* Updates: Catch download failures and handle them properly.
+
 2020-11-02  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.10 released.
@@ -115,4 +124,4 @@
 	* First release for testing.
 
 
-Copyright 2018, 2019, 2020 T+A elektroakustik GmbH & Co. KG
+Copyright 2018, 2019, 2020, 2021 T+A elektroakustik GmbH & Co. KG
