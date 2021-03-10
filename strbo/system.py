@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -87,20 +87,22 @@ def _try_launch_strbo_update_process(update_req, workdir):
         lockfile.touch(exist_ok=True)
     except Exception as e:
         log.error('Failed creating lock file: {}'.format(e))
-        return False
+        return strbo.update_strbo.ExecResult.FAILED_CREATE_LOCKFILE
     else:
-        strbo.update_strbo.exec_update(update_req, lockfile)
+        exec_result = strbo.update_strbo.exec_update(update_req, lockfile)
 
     try:
         lockfile.unlink()
         log.error('Failed lauching StrBo update')
     except FileNotFoundError:
         log.info('Launched update process in background')
-        return True
+        if exec_result is not strbo.update_strbo.ExecResult.RUNNING:
+            log.error('Unexpected exec result: {}'.format(exec_result))
+        return strbo.update_strbo.ExecResult.RUNNING
     except Exception as e:
         log.error('Failed lauching StrBo update: {}'.format(e))
 
-    return False
+    return exec_result
 
 
 class DeviceInfo(Endpoint):
@@ -221,7 +223,7 @@ class DeviceInfo(Endpoint):
             return jsonify_error(request, log, False, 400,
                                  'JSON object missing')
 
-        strbo_update_launched = False
+        launch_result = strbo.update_strbo.ExecResult.NOT_STARTED
 
         for r in req.get('update', []):
             sw_id = r.get('id', None)
@@ -229,16 +231,16 @@ class DeviceInfo(Endpoint):
                 continue
 
             if sw_id == 'strbo':
-                if strbo_update_launched:
+                if launch_result is strbo.update_strbo.ExecResult.RUNNING:
                     log.error('Tried launching StrBo update multiple times')
                 else:
-                    strbo_update_launched = \
+                    launch_result = \
                         _try_launch_strbo_update_process(r, workdir)
             else:
                 log.warning('Skipping update request for unknown id "{}"'
                             .format(sw_id))
 
-        if strbo_update_launched:
+        if launch_result is strbo.update_strbo.ExecResult.RUNNING:
             # we still need the working directory and need to monitor it for
             # changes
             self.start_update_monitor(workdir)
@@ -251,7 +253,32 @@ class DeviceInfo(Endpoint):
                                  'Failed removing directory {}: {}'
                                  .format(workdir, e))
 
-        return Response(status=200)
+        if launch_result is strbo.update_strbo.ExecResult.NOT_STARTED:
+            return Response(status=200)
+        elif launch_result is strbo.update_strbo.ExecResult.BAD_REQUEST:
+            result = jsonify_error(request, log, False, 400,
+                                   'Malformed StrBo update request')
+        elif launch_result is strbo.update_strbo.ExecResult.PLANNING_FAILED:
+            result = \
+                jsonify_error(request, log, False, 503,
+                              'Failed creating an update plan (have network?)')
+        elif launch_result is strbo.update_strbo.ExecResult.NO_PLAN:
+            result = \
+                jsonify_error(request, log, False, 503,
+                              'No update plan available (have network?)')
+        elif launch_result is strbo.update_strbo.ExecResult.EXECUTION_FAILED:
+            result = \
+                jsonify_error(request, log, False, 503,
+                              'Update plan execution failed (have network?)')
+        elif launch_result is \
+                strbo.update_strbo.ExecResult.FAILED_CREATE_LOCKFILE:
+            result = jsonify_error(request, log, False, 500,
+                                   'Unable to create lockfile')
+        else:
+            result = jsonify_error(request, log, False, 500,
+                                   'Unknown error during StrBo update')
+
+        return result
 
     def start_update_monitor(self, workdir):
         if self.strbo_update_monitor is None:

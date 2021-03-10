@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -29,6 +29,18 @@ import time
 from .external import Directories, Files, Helpers
 from .utils import get_logger, is_process_running, remove_file
 log = get_logger()
+
+
+class ExecResult(Enum):
+    """Result of an update execution request.
+    """
+    NOT_STARTED = 1
+    RUNNING = 2
+    BAD_REQUEST = 3
+    PLANNING_FAILED = 4
+    NO_PLAN = 5
+    EXECUTION_FAILED = 6
+    FAILED_CREATE_LOCKFILE = 7
 
 
 def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
@@ -70,12 +82,15 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
     lockfile.unlink()
 
     if Helpers.invoke('updata_execute', str(shfile), str(workdir)) == 0:
-        return
+        return ExecResult.RUNNING
 
     if plan_file.exists():
+        exec_result = ExecResult.EXECUTION_FAILED
         plan = json.load(plan_file.open('r'))
         log.error('Executing plan FAILED: {}'.format(plan))
         plan_file.unlink()
+    else:
+        exec_result = ExecResult.NO_PLAN
 
     # create state RF with our own error message so that the
     # :class:`UpdateMonitor` can see it
@@ -94,6 +109,8 @@ def _execute_update_plan(plan_file, lockfile, keep_existing_script=False):
 
     (workdir / 'update_failure_again').touch()
     remove_file(workdir / 'update.pid')
+
+    return exec_result
 
 
 _update_name_to_cmdline_arg = {
@@ -132,14 +149,14 @@ def _perform_parameterized_update(request, lockfile):
 
     try:
         if Helpers.invoke('updata_plan', args) == 0:
-            _execute_update_plan(pf, lockfile)
-            return
+            return _execute_update_plan(pf, lockfile)
     except Exception as e:
         log.error('Failed generating upgrade plan: {}'.format(e))
     else:
         log.error('Failed generating upgrade plan')
 
     remove_file(pf)
+    return ExecResult.PLANNING_FAILED
 
 
 def exec_update(request, lockfile):
@@ -162,20 +179,25 @@ def exec_update(request, lockfile):
     # figure out what the request wants us to do
     if 'base_url' in request:
         # parameters from which UpdaTA can create a plan
-        _perform_parameterized_update(request, lockfile)
+        exec_result = _perform_parameterized_update(request, lockfile)
     elif 'plan' in request:
         # embedded update plan
         pf = Directories.get('update_workdir') / 'rest_update.plan'
         with pf.open('w') as f:
             f.write(json.dumps(request['plan']))
 
-        _execute_update_plan(pf, lockfile)
+        exec_result = _execute_update_plan(pf, lockfile)
     elif 'plan_file' in request:
         # update plan stored on file in our local file system
-        _execute_update_plan(Path(request['plan_file']), lockfile,
-                             request.get('keep_existing_updata_script', False))
+        exec_result = \
+            _execute_update_plan(Path(request['plan_file']), lockfile,
+                                 request.get('keep_existing_updata_script',
+                                             False))
     else:
         log.warning('Don\'t know what to do for StrBo update request')
+        exec_result = ExecResult.BAD_REQUEST
+
+    return exec_result
 
 
 class UpdateStatus(Enum):
