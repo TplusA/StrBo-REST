@@ -27,7 +27,7 @@ from threading import RLock
 from werkzeug.wrappers import Response
 from werkzeug.datastructures import FileStorage
 from urllib.request import urlopen
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from zlib import adler32
 import halogen
 import re
@@ -38,7 +38,7 @@ import dbus.exceptions
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Tools, Files, Directories, Helpers
 from .utils import jsonify_e, jsonify_nc, if_none_match
-from .utils import jsonify_error, mk_error_object
+from .utils import jsonify_error
 from .utils import try_mount_partition, MountResult
 from .utils import try_unmount_partition, UnmountResult
 from .utils import is_mountpoint
@@ -528,11 +528,9 @@ def _replace_recovery_system_data(request, status):
         elif file_from_form:
             file_from_form.save(str(gpgfile))
         else:
-            error = mk_error_object(request, log, False,
-                                    'No recovery data file specified')
-            return jsonify_nc(request,
-                              result='error', reason='no image data',
-                              error_object=error)
+            return jsonify_error(request, log, False, 400,
+                                 'No recovery data file specified',
+                                 error='no image data')
 
         log.info('Verifying recovery data signature')
         status.set_step_name('verifying signature')
@@ -545,30 +543,25 @@ def _replace_recovery_system_data(request, status):
         if Tools.invoke_cwd(gpgfile.parent, 15,
                             'gpg', '--homedir', gpghome,
                             '--import', Files.get('gpg_key')) != 0:
-            error = mk_error_object(request, log, False,
-                                    'Failed to import GPG public key')
-            return jsonify_nc(request,
-                              result='error', reason='no public key',
-                              error_object=error)
+            return jsonify_error(request, log, False, 500,
+                                 'Failed to import GPG public key',
+                                 error='no public key')
 
         if Tools.invoke_cwd(gpgfile.parent, 600,
                             'gpg', '--homedir', gpghome, gpgfile) != 0:
-            error = mk_error_object(
-                    request, log, False,
-                    'Invalid signature, rejecting downloaded recovery data')
-            return jsonify_nc(request,
-                              result='error', reason='invalid signature',
-                              error_object=error)
+            return jsonify_error(
+                    request, log, False, 503,
+                    'Invalid signature, rejecting downloaded recovery data',
+                    error='invalid signature')
 
         log.info('Testing recovery data archive')
         status.set_step_name('verifying archive')
 
         if Tools.invoke(150, 'tar', 'tf', payload) != 0:
-            error = mk_error_object(
-                    request, log, False,
-                    'Broken archive, rejecting downloaded recovery data')
-            return jsonify_nc(request, result='error', reason='broken archive',
-                              error_object=error)
+            return jsonify_error(
+                    request, log, False, 503,
+                    'Broken archive, rejecting downloaded recovery data',
+                    error='broken archive')
 
         status.set_step_name('extracting')
         mountpoint = Path('/src')
@@ -586,41 +579,33 @@ def _replace_recovery_system_data(request, status):
             log.info('Extracting recovery data archive')
 
             if Helpers.invoke('replace_recovery_data', payload, imgdir) != 0:
-                error = mk_error_object(
-                        request, log, True,
-                        'Error while extracting recovery data archive')
-                result = jsonify_nc(request,
-                                    result='error', reason='write error',
-                                    error_object=error)
+                result = jsonify_error(
+                        request, log, True, 500,
+                        'Error while extracting recovery data archive',
+                        error='write error')
             else:
                 succeeded = True
                 result = jsonify_nc(request,
                                     result='success', reason='super hero')
         elif mount_result is MountResult.ALREADY_MOUNTED:
-            error = mk_error_object(request, log, False,
-                                    'Recovery data locked, cannot replace')
-            result = jsonify_nc(request, result='error', reason='locked',
-                                error_object=error)
+            result = jsonify_error(request, log, False, 500,
+                                   'Recovery data locked, cannot replace',
+                                   error='locked')
         elif mount_result is MountResult.FAILED:
-            error = mk_error_object(
-                    request, log, True,
-                    'Recovery data unaccessible in file system (failure)')
-            result = jsonify_nc(request, result='error', reason='inaccessible',
-                                error_object=error)
+            result = jsonify_error(
+                    request, log, True, 500,
+                    'Recovery data unaccessible in file system (failure)',
+                    error='inaccessible')
         elif mount_result is MountResult.TIMEOUT:
-            error = mk_error_object(
-                    request, log, True,
-                    'Recovery data unaccessible in file system (timeout)')
-            result = jsonify_nc(request,
-                                result='error', reason='mount timeout',
-                                error_object=error)
+            result = jsonify_error(
+                    request, log, True, 500,
+                    'Recovery data unaccessible in file system (timeout)',
+                    error='mount timeout')
         else:
-            error = mk_error_object(
-                    request, log, True,
+            result = jsonify_error(
+                    request, log, True, 500,
                     'Cannot replace recovery data due to some unknown '
                     'error while mounting')
-            result = jsonify_nc(request, result='error', reason='unknown',
-                                error_object=error)
 
         if succeeded:
             log.info('Cleaning up to make new recovery data usable')
@@ -640,12 +625,16 @@ def _replace_recovery_system_data(request, status):
             log.error('Replacing recovery data FAILED')
 
         return result
+    except HTTPError as e:
+        return jsonify_error(
+                request, log, False, e.code,
+                'Failed downloading recovery data: {}'.format(e.reason),
+                error='download error', url=url_from_form)
     except URLError as e:
-        error = mk_error_object(
-                request, log, False,
-                'Failed downloading recovery data: {}'.format(e))
-        return jsonify_nc(request, result='error', reason='download error',
-                          error_object=error)
+        return jsonify_error(
+                request, log, False, 502,
+                'Failed downloading recovery data: {}'.format(e.reason),
+                error='download error', url=url_from_form)
     except Exception as e:
         log.error('Replacing recovery data FAILED: {}'.format(e))
 
@@ -712,7 +701,9 @@ class DReplace(Endpoint):
         A download URL is passed in as parameter ``dataurl``. It shall contain
         a valid URL of a recovery data archive. A request of this kind is small
         and sent quickly. In this case, the Streaming Board is responsible for
-        retrieving the archive.
+        retrieving the archive. Download errors end up with HTTP status 502 or
+        the status returned by the remote server, and the response will contain
+        an error object.
 
         Alternatively, direct recovery data archive upload can be done through
         parameter ``datafile``. A request of this kind will take a long time to
@@ -1105,11 +1096,9 @@ def _replace_recovery_system(request, status):
         elif file_from_form:
             file_from_form.save(str(gpgfile))
         else:
-            error = mk_error_object(request, log, False,
-                                    'No recovery system file specified')
-            return jsonify_nc(request,
-                              result='error', reason='no image data',
-                              error_object=error)
+            return jsonify_error(request, log, False, 400,
+                                 'No recovery system file specified',
+                                 error='no image data')
 
         log.info('Verifying recovery system signature')
         status.set_step_name('verifying signature')
@@ -1122,21 +1111,17 @@ def _replace_recovery_system(request, status):
         if Tools.invoke_cwd(gpgfile.parent, 15,
                             'gpg', '--homedir', gpghome,
                             '--import', Files.get('gpg_key')) != 0:
-            error = mk_error_object(request, log, False,
-                                    'Failed to import GPG public key')
-            return jsonify_nc(request,
-                              result='error', reason='no public key',
-                              error_object=error)
+            return jsonify_error(request, log, False, 500,
+                                 'Failed to import GPG public key',
+                                 error='no public key')
 
         if Tools.invoke_cwd(gpgfile.parent, 600,
                             'gpg', '--homedir', gpghome,
                             '--output', payload, gpgfile) != 0:
-            error = mk_error_object(
-                    request, log, False,
-                    'Invalid signature, rejecting downloaded recovery system')
-            return jsonify_nc(request,
-                              result='error', reason='invalid signature',
-                              error_object=error)
+            return jsonify_error(
+                    request, log, False, 503,
+                    'Invalid signature, rejecting downloaded recovery system',
+                    error='invalid signature')
 
         status.set_step_name('flashing and verifying')
         payload.chmod(0o700)
@@ -1155,38 +1140,31 @@ def _replace_recovery_system(request, status):
             log.info('Executing recovery system installer')
 
             if Helpers.invoke('replace_recovery_system', workdir) != 0:
-                error = mk_error_object(
-                        request, log, True,
-                        'Error while replacing recovery system')
-                result = jsonify_nc(request,
-                                    result='error', reason='write error',
-                                    error_object=error)
+                result = jsonify_error(
+                        request, log, True, 500,
+                        'Error while replacing recovery system',
+                        error='write error')
             else:
                 succeeded = True
                 result = jsonify_nc(request,
                                     result='success', reason='super hero')
         elif unmount_result is UnmountResult.FAILED:
-            error = mk_error_object(
-                    request, log, True,
+            result = jsonify_error(
+                    request, log, True, 500,
                     'Recovery system partition unaccessible '
-                    'in file system (failure)')
-            result = jsonify_nc(request, result='error', reason='inaccessible',
-                                error_object=error)
+                    'in file system (failure)',
+                    error='inaccessible')
         elif unmount_result is UnmountResult.TIMEOUT:
-            error = mk_error_object(
-                    request, log, True,
+            result = jsonify_error(
+                    request, log, True, 500,
                     'Recovery system partition unaccessible '
-                    'in file system (timeout)')
-            result = jsonify_nc(request,
-                                result='error', reason='mount timeout',
-                                error_object=error)
+                    'in file system (timeout)',
+                    error='mount timeout')
         else:
-            error = mk_error_object(
-                    request, log, True,
+            result = jsonify_error(
+                    request, log, True, 500,
                     'Cannot replace recovery system due to some unknown '
                     'error while unmounting')
-            result = jsonify_nc(request, result='error', reason='unknown',
-                                error_object=error)
 
         if succeeded:
             log.info('Cleaning up to make new recovery system usable')
@@ -1206,12 +1184,16 @@ def _replace_recovery_system(request, status):
             log.error('Replacing recovery system FAILED')
 
         return result
+    except HTTPError as e:
+        return jsonify_error(
+                request, log, False, e.code,
+                'Failed downloading recovery system: {}'.format(e.reason),
+                error='download error', url=url_from_form)
     except URLError as e:
-        error = mk_error_object(
-                request, log, False,
-                'Failed downloading recovery system: {}'.format(e))
-        return jsonify_nc(request, result='error', reason='download error',
-                          error_object=error)
+        return jsonify_error(
+                request, log, False, 502,
+                'Failed downloading recovery system: {}'.format(e.reason),
+                error='download error', url=url_from_form)
     except Exception as e:
         log.error('Replacing recovery system FAILED: {}'.format(e))
 
