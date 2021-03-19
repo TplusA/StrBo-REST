@@ -226,8 +226,9 @@ class UpdateScriptState(IntEnum):
     FR2 = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5
     FRF = 1 << 0 | 1 << 2 | 1 << 4 | 1 << 5 | 1 << 6
     DONE = 1 << 7
-    NOT_RUNNING = 1 << 8
-    INVALID = 1 << 9
+    OU = 1 << 0 | 1 << 8
+    NOT_RUNNING = 1 << 9
+    INVALID = 1 << 10
 
 
 class UpdateMonitor(Thread):
@@ -266,6 +267,9 @@ class UpdateMonitor(Thread):
 
         if (self._workdir / 'update_finished').exists():
             return UpdateScriptState.DONE
+
+        if Path('/system-update').exists():
+            return UpdateScriptState.OU
 
         files = \
             ((self._workdir / 'update_started').exists() << 0) | \
@@ -349,6 +353,12 @@ class UpdateMonitor(Thread):
                 # rebooting regularly
                 log.info('StrBo Update: Expecting reboot')
                 time.sleep(2)
+                continue
+
+            if script_state is UpdateScriptState.OU:
+                # offline system update
+                log.info('StrBo Update: Offline system update')
+                time.sleep(10)
                 continue
 
             if script_state is UpdateScriptState.DONE:
