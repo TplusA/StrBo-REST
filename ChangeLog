@@ -1,3 +1,10 @@
+2021-03-19  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.12 released.
+
+	* Updates: Updated monitoring of UpdaTA v0.5. This was necessary to
+	  avoid abortion of the update process
+
 2021-03-10  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.11 released.
