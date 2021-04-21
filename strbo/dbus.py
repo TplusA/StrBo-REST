@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -222,3 +222,10 @@ class Interfaces:
         return Interfaces._cache.get_interface('de.tahifi.Dcpd',
                                                '/de/tahifi/Dcpd',
                                                'de.tahifi.Dcpd.Network')
+
+    @staticmethod
+    def mounta():
+        """Proxy to MounTA (``de.tahifi.MounTA``)."""
+        return Interfaces._cache.get_interface('de.tahifi.MounTA',
+                                               '/de/tahifi/MounTA',
+                                               'de.tahifi.MounTA')
