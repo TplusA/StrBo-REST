@@ -23,7 +23,8 @@
 import halogen
 from threading import Lock
 from werkzeug.utils import cached_property
-from werkzeug.wrappers import Request
+from werkzeug.wrappers import Request, ETagRequestMixin
+from werkzeug.wrappers import Response, ETagResponseMixin
 from werkzeug.http import parse_options_header
 from json import loads
 from json.decoder import JSONDecodeError
@@ -124,7 +125,14 @@ class EntryPoint(Endpoint):
         return jsonify(request, EntryPointSchema.serialize(self))
 
 
-class JSONRequest(Request):
+class FileResponse(Response, ETagResponseMixin):
+    def __init__(self, **kwargs):
+        super().__init__(kwargs)
+        self.headers['Content-Type'] = 'application/octet-stream'
+        self.headers['Accept-Ranges'] = 'bytes'
+
+
+class JSONRequest(Request, ETagRequestMixin):
     """Custom request extension to allow extraction of JSON data.
 
     All requests passed to the :class:`strbo.endpoint.Endpoint` handlers are of

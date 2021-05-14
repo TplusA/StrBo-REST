@@ -23,12 +23,16 @@
 
 from threading import RLock
 import halogen
+import urllib.parse
 
 from .endpoint import Endpoint, register_endpoints, register_endpoint
+from .endpoint import url_for
 from .utils import jsonify, jsonify_error
+from .utils import if_none_match
 from .utils import get_logger
 import strbo.dbus
 import strbo.usb
+import strbo.rest
 import dbus.exceptions
 log = get_logger()
 
@@ -95,6 +99,8 @@ class USBDeviceSchema(halogen.Schema):
 class USBPartitionSchema(halogen.Schema):
     name = halogen.Attr()
     device = halogen.Attr(attr=lambda value: value.device_uuid)
+    browse_href = \
+        halogen.Attr(attr=lambda value: '/browse/usbfs/' + value.uuid + '/')
 
 
 class USBAudioSourceSchema(halogen.Schema):
@@ -132,40 +138,35 @@ class USBAudioSource(AudioSource):
 
     def __call__(self, request, id, **values):
         with self.lock:
-            devs = None
-            self._devices_and_partitions.clear()
-
             try:
-                iface = strbo.dbus.Interfaces.mounta()
-                devs = iface.GetAll()
+                cached = if_none_match(request,
+                                       self._devices_and_partitions.get_etag())
             except dbus.exceptions.DBusException as e:
                 return jsonify_error(
                             request, log, True, 500,
                             'Exception [MounTA]: ' + e.get_dbus_message(),
                             error='mounta')
 
-            for d in devs[0]:
-                dev = strbo.usb.Device(d[0], d[1], d[2])
-                self._devices_and_partitions.add_device(dev)
-
-            for p in devs[1]:
-                part = strbo.usb.Partition(p[0], p[3], p[1], p[2])
-                self._devices_and_partitions.add_partition(part)
+            if cached:
+                return cached
 
             return jsonify(request, USBAudioSourceSchema.serialize(self))
 
     def get_all_devices(self):
-        return {
-            dev.uuid: dev
-            for dev in self._devices_and_partitions.get_devices().values()
-        }
+        with self.lock:
+            return {
+                dev.uuid: dev
+                for dev in self._devices_and_partitions.get_devices().values()
+            }
 
     def get_all_partitions(self):
-        return {
-            part.uuid: part
-            for parts in self._devices_and_partitions.get_partitions().values()
-            for part in parts.values()
-        }
+        with self.lock:
+            return {
+                part.uuid: part
+                for parts in
+                self._devices_and_partitions.get_partitions().values()
+                for part in parts.values()
+            }
 
 
 class AudioSourcesSchema(halogen.Schema):
@@ -198,10 +199,219 @@ class AudioSources(Endpoint):
     def __call__(self, request, **values):
         return jsonify(request, AudioSourcesSchema.serialize(self))
 
+    def get_usb_audio_source(self):
+        return self._all_audio_sources[0]
+
+
+class ListBrowsersSchema(halogen.Schema):
+    """Representation of :class:`ListBrowsers`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+
+class ListBrowser(Endpoint):
+    def __init__(self, name, title, list_browsers_endpoint):
+        Endpoint.__init__(self, 'list_browser', name=name, title=title)
+        self.list_browsers_endpoint = list_browsers_endpoint
+
+
+def get_offset_and_page_and_maximum_size(args):
+    size = args.get('size', None)
+    page = args.get('page', 0)
+
+    if size is None:
+        return 0, None, None
+
+    try:
+        size = int(size)
+        page = int(page)
+    except:  # noqa: 722
+        return None, -1, -1
+
+    if size < 0 or page < 0:
+        return None, -1, -1
+
+    # offset, page number, maximum size of a page
+    return page * size, page, size
+
+
+class ListBrowserUSBFS(ListBrowser):
+    #: Path to endpoint.
+    href = '/browse/usbfs/{partition}/{path}'
+    href_for_map = [
+        '/browse/usbfs/<partition>/',
+        '/browse/usbfs/<partition>/<path:path>',
+    ]
+
+    #: Supported HTTP methods.
+    methods = ('GET', )
+
+    def __init__(self, list_browsers_endpoint):
+        super().__init__('usbfs_list_browser',
+                         'List of USB mass storage devices',
+                         list_browsers_endpoint)
+
+    def __call__(self, request, partition, path='', **values):
+        list_offset, list_page, list_maxsize = \
+            get_offset_and_page_and_maximum_size(request.args)
+
+        if list_offset is None:
+            return jsonify_error(request, log, False, 400,
+                                 'Invalid pagination parameters',
+                                 error='usbfs')
+
+        def get_items_and_meta():
+            if list_maxsize is None or list_maxsize > 0:
+                items = sorted(real_path.glob('*'))
+                meta = {
+                    'total_size': len(items),
+                    'offset': list_offset,
+                }
+
+                if list_maxsize is not None:
+                    items = items[list_offset:list_offset + list_maxsize]
+                    meta['page'] = list_page
+                    meta['size'] = list_maxsize
+            else:
+                items = None
+                meta = {'total_size': len(list(real_path.glob('*')))}
+
+            return items, meta
+
+        def get_item_info_object(file):
+            relpath = file.relative_to(part.mountpoint)
+            href = url_for(request, self, {
+                               'partition': partition,
+                               'path': str(relpath)
+                           })
+            obj = {'name': file.name, 'href': href}
+
+            if file.is_file():
+                obj['type'] = 'file'
+                obj['playurl'] = urllib.parse.urlunparse((
+                    'strbo-usb', '',
+                    urllib.parse.quote('/{}/{}'.format(partition, relpath)),
+                    None, None, None
+                ))
+            elif file.is_dir():
+                obj['type'] = 'dir'
+
+            return obj
+
+        def get_items_from_usb_directory():
+            result = []
+
+            for it in items:
+                result.append(get_item_info_object(it))
+
+            return result
+
+        part, real_path = self._get_partition_and_real_path(partition, path)
+
+        if not real_path or not real_path.exists():
+            return jsonify_error(request, log, False, 404,
+                                 'Does not exist', error='usbfs')
+
+        if real_path.is_file():
+            if strbo.utils.request_accepts_json(request):
+                return jsonify(request, get_item_info_object(real_path))
+            else:
+                response = strbo.rest.FileResponse(status=200)
+
+                if request.range is None:
+                    response.data = real_path.read_bytes()
+                else:
+                    barr = bytearray()
+                    with real_path.open('rb') as f:
+                        for r in request.range.ranges:
+                            f.seek(r[0])
+                            barr += bytearray(f.read(r[1] - r[0]))
+
+                    response.data = bytes(barr)
+
+                return response
+
+        if not real_path.is_dir():
+            return jsonify_error(request, log, False, 403,
+                                 'Unsupported file type', error='usbfs')
+
+        items, meta = get_items_and_meta()
+        result = {'meta': meta}
+
+        if items is not None:
+            result['items'] = get_items_from_usb_directory()
+
+        return jsonify(request, result)
+
+    def _get_partition_and_real_path(self, partition, path):
+        usb = \
+            self.list_browsers_endpoint.audio_sources_ep.get_usb_audio_source()
+        part = usb.get_all_partitions().get(partition)
+        real_path = part.mountpoint / path if part else None
+        return part, real_path
+
+
+class _AllLists:
+    def __init__(self):
+        self.lock = RLock()
+        self.list_urls = []
+
+    def __enter__(self):
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.lock.release()
+        return False
+
+    def __iter__(self):
+        return iter(self._list_urls)
+
+
+class ListBrowsers(Endpoint):
+    href = '/browse'
+    methods = ('GET', )
+    lock = RLock()
+    _all_lists = None
+    _all_lists_etag = None
+
+    def __init__(self, audio_sources_ep):
+        Endpoint.__init__(self, 'list_browsers',
+                          name='list_browsers', title='Lists')
+        self.audio_sources_ep = audio_sources_ep
+        self.usb_browser_ep = ListBrowserUSBFS(self)
+
+    def __enter__(self):
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.lock.release()
+        return False
+
+    def __call__(self, request, **values):
+        with self.lock:
+            cached = if_none_match(request, self.get_etag())
+            if cached:
+                return cached
+
+            self._refresh()
+            return jsonify(request, ListBrowsersSchema.serialize(self))
+
+    def _refresh(self):
+        self._all_lists = _AllLists()
+        self._all_lists_etag = None
+
+    def get_etag(self):
+        return self._all_lists_etag
+
 
 audio_sources_endpoint = AudioSources()
+list_browsers_endpoint = ListBrowsers(audio_sources_endpoint)
 all_endpoints = [
     audio_sources_endpoint,
+    list_browsers_endpoint, list_browsers_endpoint.usb_browser_ep,
 ]
 
 

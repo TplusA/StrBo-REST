@@ -23,6 +23,10 @@
 
 import pathlib
 
+from .utils import get_logger
+import strbo.dbus
+log = get_logger()
+
 
 class Device:
     def __init__(self, mounta_id, name, rootpath):
@@ -46,13 +50,40 @@ class Partition:
 
 class DevicesAndPartitions:
     def __init__(self):
-        self.clear()
+        self._clear()
 
-    def clear(self):
+    def get_devices(self):
+        self.get_etag()
+        return self._devices
+
+    def get_partitions(self):
+        self.get_etag()
+        return self._partitions
+
+    def get_etag(self):
+        if self._etag is None:
+            self._refresh()
+
+        return self._etag
+
+    def _clear(self):
         self._devices = {}
         self._partitions = {}
+        self._etag = None
 
-    def add_partition(self, p):
+    def _refresh(self):
+        self._clear()
+        devs = strbo.dbus.Interfaces.mounta().GetAll()
+
+        for d in devs[0]:
+            dev = strbo.usb.Device(d[0], d[1], d[2])
+            self._add_device(dev)
+
+        for p in devs[1]:
+            part = strbo.usb.Partition(p[0], p[3], p[1], p[2])
+            self._add_partition(part)
+
+    def _add_partition(self, p):
         if p.mounta_device_id not in self._partitions:
             self._partitions[p.mounta_device_id] = {p.part_number: p}
         else:
@@ -63,7 +94,7 @@ class DevicesAndPartitions:
             p.device_uuid = dev.uuid
             dev.partition_uuids.append(p.uuid)
 
-    def add_device(self, device):
+    def _add_device(self, device):
         if device.mounta_id in self._partitions:
             for p in self._partitions[device.mounta_id]:
                 p.device_uuid = device.uuid
@@ -71,12 +102,6 @@ class DevicesAndPartitions:
 
         self._devices[device.mounta_id] = device
 
-    def remove_device(self, id):
+    def _remove_device(self, id):
         self._devices.pop(id, None)
         self._partitions.pop(id, None)
-
-    def get_devices(self):
-        return self._devices
-
-    def get_partitions(self):
-        return self._partitions
