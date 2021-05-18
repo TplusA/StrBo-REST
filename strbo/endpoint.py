@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -241,8 +241,12 @@ dispatchers = {}
 
 def register_endpoint(e):
     """Register one endpoint."""
-    url_map.add(Rule(getattr(e, 'href_for_map', e.href),
-                     endpoint=e.id, methods=e.methods))
+    hrefs = getattr(e, 'href_for_map', e.href)
+    if isinstance(hrefs, list):
+        for href in hrefs:
+            url_map.add(Rule(href, endpoint=e.id, methods=e.methods))
+    else:
+        url_map.add(Rule(hrefs, endpoint=e.id, methods=e.methods))
 
     dispatchers[e.id] = e
 
