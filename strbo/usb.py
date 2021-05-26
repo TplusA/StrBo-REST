@@ -29,22 +29,21 @@ log = get_logger()
 
 
 class Device:
-    def __init__(self, mounta_id, name, rootpath):
+    def __init__(self, mounta_id, name, uuid, rootpath):
         self.mounta_id = int(mounta_id)
         self.name = str(name)
+        self.uuid = uuid
         self.rootpath = str(rootpath)
-        self.uuid = 'TODO-DEVICE-UUID-{}'.format(mounta_id)
         self.partition_uuids = []
 
 
 class Partition:
-    def __init__(self, part_number, mounta_device_id, name, mountpoint):
+    def __init__(self, part_number, mounta_device_id, name, mountpoint, uuid):
         self.part_number = int(part_number)
         self.mounta_device_id = int(mounta_device_id)
         self.name = str(name)
         self.mountpoint = pathlib.Path(mountpoint)
-        self.uuid = 'TODO-PARTITION-UUID-{}-{}' \
-                    .format(mounta_device_id, part_number)
+        self.uuid = uuid
         self.device_uuid = None
 
 
@@ -76,11 +75,11 @@ class DevicesAndPartitions:
         devs = strbo.dbus.Interfaces.mounta().GetAll()
 
         for d in devs[0]:
-            dev = strbo.usb.Device(d[0], d[1], d[2])
+            dev = strbo.usb.Device(d[0], d[1], d[2], d[3])
             self._add_device(dev)
 
         for p in devs[1]:
-            part = strbo.usb.Partition(p[0], p[3], p[1], p[2])
+            part = strbo.usb.Partition(p[0], p[3], p[1], p[2], p[4])
             self._add_partition(part)
 
     def _add_partition(self, p):
