@@ -80,25 +80,22 @@ class EntryPointSchema(halogen.Schema):
         'minor': 12,
     })
 
-    #: TCP port of the event monitor. Field may be missing in case the
-    #: monitor has not been started.
-    monitor_port = halogen.Attr(required=False)
-
 
 class EntryPoint(Endpoint):
     """**API Endpoint** - Entry point to API.
 
     Clients should ``GET`` this endpoint to retrieve links to more API
-    endpoints and to find out the TCP port of the event monitor (see
+    endpoints and to start the WebSocket events entry point (see
     :class:`strbo.monitor.Monitor`).
 
-    Note that the event monitor is only started on first access. Therefore,
-    accessing this endpoint right before doing anything else with the API is a
-    good idea (actually, it's mandatory) as it can check if the API is up and
-    running, and it ensures that the event monitoring works.
+    Note that registering with the event monitor is required to get
+    asynchronous notifications about things going on in the system. In general,
+    however, this is only possible after accessing this endpoint. Therefore,
+    any client which needs to listen to notifications *must* access the main
+    API entry point before trying to subscribe to the WebSocket.
 
-    Also be aware that the monitor port number or any public endpoint URL may
-    change *without prior notice*. Always read out the link URLs from this
+    Also be aware that the event monitor entry URL or any public endpoint URL
+    may change *without prior notice*. Always read out the link URLs from this
     resource, and never, *ever* rely on hardcoded paths except on the path to
     this entry point.
 
