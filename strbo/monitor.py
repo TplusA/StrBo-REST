@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -24,11 +24,28 @@ import threading
 import selectors
 import socket
 import os
+import json
 from queue import Queue
 
 from .endpoint import Endpoint, SerializeError, EmptyError
 from .utils import get_logger
 log = get_logger('Monitor')
+
+
+class Client:
+    def __init__(self):
+        self._input_buffer = bytearray()
+
+    def append_data(self, data):
+        self._input_buffer += bytearray(data)
+
+    def have_data(self):
+        return self._input_buffer != b''
+
+    def take_data(self):
+        result = self._input_buffer
+        self._input_buffer = bytearray()
+        return result
 
 
 class ClientListener:
@@ -60,14 +77,50 @@ class ClientListener:
 
     @staticmethod
     def _read(conn, mask, sel, **kwargs):
-        try:
-            log.info('Lost client {0[0]}:{0[1]}'.format(conn.getpeername()))
-        except:  # noqa: E722
-            log.info('Lost client {}'.format(conn))
+        data = conn.recv(1024)
 
-        sel.unregister(conn)
-        conn.close()
-        kwargs['remove_cb'](conn)
+        if data == b'':
+            try:
+                log.info('Lost client {0[0]}:{0[1]}'
+                         .format(conn.getpeername()))
+            except:  # noqa: E722
+                log.info('Lost client {}'.format(conn))
+
+            sel.unregister(conn)
+            conn.close()
+            kwargs['remove_cb'](conn)
+            return
+
+        from . import monitor
+        client = monitor.get_client_by_connection(conn)
+
+        while data:
+            pos = data.find(b'\0')
+
+            if pos == -1:
+                client.append_data(data)
+                return
+
+            if not client.have_data() and pos == len(data) - 1:
+                # optimization for the common case: received one complete
+                # message
+                try:
+                    msg = json.loads(data[:-1].decode('utf-8'))
+                except json.decoder.JSONDecodeError as e:
+                    log.error('Dropping malformed message: {}'.format(e))
+                    msg = None
+                data = bytes()
+            else:
+                # received fragments or multiple messages
+                client.append_data(data[:pos])
+                data = data[pos + 1:]
+                try:
+                    msg = json.loads(client.take_data().decode('utf-8'))
+                except json.decoder.JSONDecodeError:
+                    msg = None
+
+            if msg is not None:
+                log.info('Client msg: {}'.format(msg))
 
     def kick_client(self, conn):
         ClientListener._read(conn, None, self.sel,
@@ -287,6 +340,10 @@ class Monitor:
         self._lock.release()
         return False
 
+    def get_client_by_connection(self, conn):
+        with self._lock:
+            return self.clients[conn]
+
     def _add_client(self, conn):
         """Callback for :class:`ClientListener`, called for each new client.
 
@@ -295,7 +352,7 @@ class Monitor:
         :attr:`client_listener` attribute.
         """
         with self._lock:
-            self.clients[conn] = None
+            self.clients[conn] = Client()
 
     def _remove_client(self, conn):
         """Callback for :class:`ClientListener`, called for each remove client.
