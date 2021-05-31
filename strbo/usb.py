@@ -22,6 +22,7 @@
 
 
 import pathlib
+from zlib import adler32
 
 from .utils import get_logger
 import strbo.dbus
@@ -55,6 +56,9 @@ class DevicesAndPartitions:
         self.get_etag()
         return self._devices
 
+    def get_devices_as_stored(self):
+        return self._devices
+
     def get_partitions(self):
         self.get_etag()
         return self._partitions
@@ -64,6 +68,9 @@ class DevicesAndPartitions:
             self._refresh()
 
         return self._etag
+
+    def invalidate(self):
+        self._etag = None
 
     def _clear(self):
         self._devices = {}
@@ -82,6 +89,14 @@ class DevicesAndPartitions:
             part = strbo.usb.Partition(p[0], p[3], p[1], p[2], p[4])
             self._add_partition(part)
 
+        uuids = \
+            '|'.join(sorted([d.uuid for d in self._devices.values()])) + \
+            '+' + \
+            '|'.join(sorted([p.uuid
+                             for pi in self._partitions.values()
+                             for p in pi.values()]))
+        self._etag = '{:08x}'.format(adler32(bytes(uuids, 'UTF-8')))
+
     def _add_partition(self, p):
         if p.mounta_device_id not in self._partitions:
             self._partitions[p.mounta_device_id] = {p.part_number: p}
@@ -93,6 +108,8 @@ class DevicesAndPartitions:
             p.device_uuid = dev.uuid
             dev.partition_uuids.append(p.uuid)
 
+        self._etag = None
+
     def _add_device(self, device):
         if device.mounta_id in self._partitions:
             for p in self._partitions[device.mounta_id]:
@@ -100,7 +117,9 @@ class DevicesAndPartitions:
                 device.partitions_uuids.append(p.uuid)
 
         self._devices[device.mounta_id] = device
+        self._etag = None
 
     def _remove_device(self, id):
         self._devices.pop(id, None)
         self._partitions.pop(id, None)
+        self._etag = None

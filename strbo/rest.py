@@ -191,8 +191,8 @@ class StrBo:
             detach_from_system_update()
 
             if self.is_monitor_started:
-                from . import monitor
-                monitor.stop()
+                from . import get_monitor
+                get_monitor().stop()
                 self.is_monitor_started = False
 
             Bus().close()
@@ -209,9 +209,9 @@ class StrBo:
             if self.is_monitor_started:
                 return
 
-            from . import monitor
+            from . import get_monitor
             monitor_port = int(server_port) + 1
-            monitor.start(monitor_port)
+            get_monitor().start(monitor_port)
             self.entry_point.monitor_port = monitor_port
             self.is_monitor_started = True
 

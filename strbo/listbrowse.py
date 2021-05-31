@@ -30,6 +30,7 @@ from .endpoint import url_for
 from .utils import jsonify, jsonify_error
 from .utils import if_none_match
 from .utils import get_logger
+from . import get_monitor
 import strbo.dbus
 import strbo.usb
 import strbo.rest
@@ -168,6 +169,16 @@ class USBAudioSource(AudioSource):
                 for part in parts.values()
             }
 
+    def get_device_uuid_for_mounta_id(self, id):
+        with self.lock:
+            dev = self._devices_and_partitions \
+                                    .get_devices_as_stored().get(id, None)
+            return dev.uuid if dev else None
+
+    def invalidate(self):
+        with self.lock:
+            self._devices_and_partitions.invalidate()
+
 
 class AudioSourcesSchema(halogen.Schema):
     """Representation of :class:`AudioSources`."""
@@ -213,7 +224,16 @@ class ListBrowsersSchema(halogen.Schema):
 class ListBrowser(Endpoint):
     def __init__(self, name, title, list_browsers_endpoint):
         Endpoint.__init__(self, 'list_browser', name=name, title=title)
+        self.lock = RLock()
         self.list_browsers_endpoint = list_browsers_endpoint
+
+    def __enter__(self):
+        self.lock.acquire()
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.lock.release()
+        return False
 
 
 def get_offset_and_page_and_maximum_size(args):
@@ -253,6 +273,10 @@ class ListBrowserUSBFS(ListBrowser):
                          list_browsers_endpoint)
 
     def __call__(self, request, partition, path='', **values):
+        with self.lock:
+            return self._do_call_unlocked(request, partition, path, **values)
+
+    def _do_call_unlocked(self, request, partition, path='', **values):
         list_offset, list_page, list_maxsize = \
             get_offset_and_page_and_maximum_size(request.args)
 
@@ -351,6 +375,33 @@ class ListBrowserUSBFS(ListBrowser):
         real_path = part.mountpoint / path if part else None
         return part, real_path
 
+    def add_new_usb_device(self, id, devname, uuid, rootpath, usbport):
+        with self.lock:
+            src = self.list_browsers_endpoint.audio_sources_ep \
+                                                    .get_usb_audio_source()
+            src.invalidate()
+            self._all_lists_etag = None
+            get_monitor().send_event('new_usb_device',
+                                     {'id': src.id, 'uuid': uuid}, ep=src)
+
+    def remove_usb_device(self, id, uuid, rootpath):
+        with self.lock:
+            src = self.list_browsers_endpoint.audio_sources_ep \
+                                                    .get_usb_audio_source()
+            src.invalidate()
+            self._all_lists_etag = None
+            get_monitor().send_event('removed_usb_device',
+                                     {'id': src.id, 'uuid': uuid}, ep=src)
+
+    def add_new_usb_partition(self, number, label, mountpoint,
+                              parent_id, uuid):
+        with self.lock:
+            self.list_browsers_endpoint.audio_sources_ep \
+                                        .get_usb_audio_source().invalidate()
+            self._all_lists_etag = None
+            get_monitor().send_event('new_usb_partition',
+                                     {'partition': uuid, 'path': ''}, ep=self)
+
 
 class _AllLists:
     def __init__(self):
@@ -415,6 +466,30 @@ all_endpoints = [
 ]
 
 
+def signal__new_usb_device(id, devname, uuid, rootpath, usbport):
+    with list_browsers_endpoint as ep:
+        with ep.usb_browser_ep as usb:
+            usb.add_new_usb_device(id, devname, uuid, rootpath, usbport)
+
+
+def signal__new_volume(number, label, mountpoint, parent_id, uuid):
+    with list_browsers_endpoint as ep:
+        with ep.usb_browser_ep as usb:
+            usb.add_new_usb_partition(number, label, mountpoint,
+                                      parent_id, uuid)
+
+
+def signal__device_removed(id, uuid, rootpath):
+    with list_browsers_endpoint as ep:
+        with ep.usb_browser_ep as usb:
+            usb.remove_usb_device(id, uuid, rootpath)
+
+
 def add_endpoints():
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
+
+    iface = strbo.dbus.Interfaces.mounta()
+    iface.connect_to_signal('NewUSBDevice', signal__new_usb_device)
+    iface.connect_to_signal('NewVolume', signal__new_volume)
+    iface.connect_to_signal('DeviceRemoved', signal__device_removed)

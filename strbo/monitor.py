@@ -28,6 +28,7 @@ import json
 from queue import Queue
 
 from .endpoint import Endpoint, SerializeError, EmptyError
+from .endpoint import EndpointSchema
 from .utils import get_logger
 log = get_logger('Monitor')
 
@@ -91,8 +92,8 @@ class ClientListener:
             kwargs['remove_cb'](conn)
             return
 
-        from . import monitor
-        client = monitor.get_client_by_connection(conn)
+        from . import get_monitor
+        client = get_monitor().get_client_by_connection(conn)
 
         while data:
             pos = data.find(b'\0')
@@ -168,9 +169,20 @@ class ClientListener:
 
 
 class Event:
-    def __init__(self, endpoint, **kwargs):
-        self.endpoint = endpoint
+    def __init__(self, **kwargs):
         self.kwargs = kwargs
+
+
+class EndpointEvent(Event):
+    def __init__(self, endpoint, **kwargs):
+        super().__init__(**kwargs)
+        self.endpoint = endpoint
+
+
+class ObjectEvent(Event):
+    def __init__(self, json_object, **kwargs):
+        super().__init__(**kwargs)
+        self.json_object = json_object
 
 
 def _send_message_to_client(bytes, conn):
@@ -224,7 +236,13 @@ class EventDispatcher:
                 break
 
             try:
-                message = ev.endpoint.get_json(**ev.kwargs)
+                if isinstance(ev, EndpointEvent):
+                    message = ev.endpoint.get_json(**ev.kwargs)
+                elif isinstance(ev, ObjectEvent):
+                    message = ev.json_object
+                else:
+                    log.error('Unhandled event type {}' .format(type(ev)))
+                    message = None
             except (SerializeError, EmptyError) as e:
                 log.error('Endpoint exception while processing event: {}'
                           .format(e.message))
@@ -279,7 +297,8 @@ class Monitor:
         #: A dictionary for keeping track of client connections. Its keys are
         #: socket objects. This object is a "hot" object in the sense that it
         #: is concurrently accessed by the two worker threads as well as from
-        #: any context adding new events via :meth:`send`.
+        #: any context adding new events such as :meth:`send_object` or
+        #: :meth:`send_endpoint`.
         self.clients = None
 
         #: An instance of a :class:`ClientListener`, created when the
@@ -384,7 +403,23 @@ class Monitor:
 
                 self.client_listener.kick_client(c)
 
-    def send(self, endpoint, **kwargs):
+    def send_event(self, event_name, json_object, **kwargs):
+        json_object['event'] = event_name
+        self.send_object(json_object, **kwargs)
+
+    def send_object(self, json_object, **kwargs):
+        if isinstance(json_object, dict):
+            ep = kwargs.get('ep')
+            if ep:
+                json_object['endpoint'] = EndpointSchema.serialize(ep)
+
+            json_object = json.dumps(json_object)
+
+        with self._lock:
+            if self._is_started():
+                self.event_dispatcher.put(ObjectEvent(json_object, **kwargs))
+
+    def send_endpoint(self, endpoint, **kwargs):
         """Send event to all connected clients.
 
         All connected clients are informed about changes on ``endpoint``, an
@@ -412,4 +447,4 @@ class Monitor:
 
         with self._lock:
             if self._is_started():
-                self.event_dispatcher.put(Event(endpoint, **kwargs))
+                self.event_dispatcher.put(EndpointEvent(endpoint, **kwargs))

@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -30,7 +30,7 @@ from .endpoint import Endpoint, EmptyError, register_endpoints
 from .utils import jsonify_e, jsonify_nc, jsonify_simple, jsonify_error
 from .utils import if_none_match
 from .utils import get_logger
-from . import monitor
+from . import get_monitor
 from . import listerrors
 import strbo.dbus
 log = get_logger()
@@ -410,7 +410,7 @@ class Services(Endpoint):
             s.update_login_status(data)
 
         if send_to_monitor:
-            monitor.send(self, service_id=id)
+            get_monitor().send_endpoint(self, service_id=id)
 
     def get_etag(self):
         with self.lock:

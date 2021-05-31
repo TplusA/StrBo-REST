@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -48,12 +48,15 @@ may also serve you well.)
 """
 
 from .external import register_helpers
-from .monitor import Monitor
 from .dbus import Bus
-from .rest import StrBo
 
-monitor = None
+monitor_singleton = None
 app = None
+
+
+def get_monitor():
+    global monitor_singleton
+    return monitor_singleton
 
 
 def init(path_to_helpers, debug=False):
@@ -63,13 +66,15 @@ def init(path_to_helpers, debug=False):
     """
     register_helpers(path_to_helpers)
 
-    global monitor
-    monitor = Monitor()
+    from .monitor import Monitor
+    global monitor_singleton
+    monitor_singleton = Monitor()
 
     # create the shared D-Bus instance
     Bus()
 
     root_dir = path_to_helpers[:path_to_helpers.rfind('/')]
 
+    from .rest import StrBo
     global app
     app = StrBo(root_dir, debug)
