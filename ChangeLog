@@ -1,3 +1,13 @@
+2021-06-01  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.13 released.
+
+	* USB: Enable browsing of USB devices, and playing files from them.
+
+	* API: Fix event reporting using JSON objects over WebSocket.
+
+	* Airable: Fix event reporting on login status change.
+
 2021-03-19  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.12 released.
