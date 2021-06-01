@@ -202,6 +202,11 @@ def _send_message_to_client(bytes, conn):
         except InterruptedError:
             pass
 
+    try:
+        conn.send(b'\0')
+    except InterruptedError:
+        pass
+
 
 class EventDispatcher:
     def __init__(self, clients_manager):
