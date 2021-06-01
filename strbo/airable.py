@@ -410,7 +410,12 @@ class Services(Endpoint):
             s.update_login_status(data)
 
         if send_to_monitor:
-            get_monitor().send_endpoint(self, service_id=id)
+            get_monitor().send_event(
+                'airable_login_status_change',
+                {
+                    'service_id': id,
+                    'endpoint': self.get_json(service_id=id),
+                })
 
     def get_etag(self):
         with self.lock:
