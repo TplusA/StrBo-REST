@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2019, 2020  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2019, 2020, 2021  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -70,6 +70,7 @@ class EntryPointSchema(halogen.Schema):
     api_version = halogen.Attr({
         'major': 0,
         'minor': 10,
+        'hotfix': 'a',
         'variant': 'V1',
     })
 

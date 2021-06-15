@@ -1,3 +1,10 @@
+2021-06-15  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.10a released.
+
+	* Helpers: Check file system before mounting, format it if errors are
+	  found and persist after multiple repair attempts.
+
 2020-11-02  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.10 released.
@@ -115,4 +122,4 @@
 	* First release for testing.
 
 
-Copyright 2018, 2019, 2020 T+A elektroakustik GmbH & Co. KG
+Copyright 2018, 2019, 2020, 2021 T+A elektroakustik GmbH & Co. KG
