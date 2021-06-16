@@ -13,7 +13,15 @@ set -eu
 if /usr/bin/test $# -ne 2; then exit 99; fi
 
 TARFILE="$1"
+
+set +e
 DESTDIR="$(/usr/bin/readlink -e $2)"
+set -e
+if /usr/bin/test "x${DESTDIR}" = 'x'
+then
+    /bin/mkdir -p "$2"
+    DESTDIR="$(/usr/bin/readlink -e $2)"
+fi
 
 if /usr/bin/test "x${TARFILE}" != 'x' && /usr/bin/test -f "${TARFILE}"
 then
