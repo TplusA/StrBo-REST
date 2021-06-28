@@ -77,7 +77,7 @@ class EntryPointSchema(halogen.Schema):
     #: handy at some time.
     api_version = halogen.Attr({
         'major': 0,
-        'minor': 13,
+        'minor': 14,
     })
 
 
