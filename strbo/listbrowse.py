@@ -95,6 +95,8 @@ class AudioSource(Endpoint):
 class USBDeviceSchema(halogen.Schema):
     name = halogen.Attr()
     partitions = halogen.Attr(attr=lambda value: value.partition_uuids)
+    flaky_uuid = \
+        halogen.Attr(attr=lambda value: value.uuid.startswith('DO-NOT-STORE:'))
 
 
 class USBPartitionSchema(halogen.Schema):
@@ -102,6 +104,8 @@ class USBPartitionSchema(halogen.Schema):
     device = halogen.Attr(attr=lambda value: value.device_uuid)
     browse_href = \
         halogen.Attr(attr=lambda value: '/browse/usbfs/' + value.uuid + '/')
+    flaky_uuid = \
+        halogen.Attr(attr=lambda value: value.uuid.startswith('DO-NOT-STORE:'))
 
 
 class USBAudioSourceSchema(halogen.Schema):
