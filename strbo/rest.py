@@ -42,6 +42,8 @@ from .network import all_endpoints as all_network_config_endpoints
 from .network import add_endpoints as add_network_config_endpoints
 from .listbrowse import all_endpoints as all_listbrowse_endpoints
 from .listbrowse import add_endpoints as add_listbrowse_endpoints
+from .player import all_endpoints as all_player_endpoints
+from .player import add_endpoints as add_player_endpoints
 
 from .dbus import Bus
 from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
@@ -72,6 +74,10 @@ class EntryPointSchema(halogen.Schema):
     #: Link to list browser management.
     #: See :mod:`strbo.listbrowse`.
     audio_sources = halogen.Link(halogen.types.List(EndpointSchema))
+
+    #: Link to audio player interfaces.
+    #: See :mod:`strbo.player`.
+    audio_player = halogen.Link(halogen.types.List(EndpointSchema))
 
     #: The API version. Not a very RESTful thing to do, but might become
     #: handy at some time.
@@ -117,6 +123,7 @@ class EntryPoint(Endpoint):
         self.recovery_data = all_recovery_endpoints
         self.network_config = all_network_config_endpoints
         self.audio_sources = all_listbrowse_endpoints
+        self.audio_player = all_player_endpoints
 
     def __call__(self, request, **values):
         return jsonify(request, EntryPointSchema.serialize(self))
@@ -180,6 +187,7 @@ class StrBo:
         add_recovery_endpoints()
         add_network_config_endpoints()
         add_listbrowse_endpoints()
+        add_player_endpoints()
 
         log.info('Up and running')
 

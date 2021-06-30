@@ -235,3 +235,17 @@ class Interfaces:
         return Interfaces._cache.get_interface('de.tahifi.MounTA',
                                                '/de/tahifi/MounTA',
                                                'de.tahifi.MounTA')
+
+    @staticmethod
+    def streamplayer_urlfifo():
+        """Proxy to Streamplayer (``de.tahifi.Streamplayer.URLFIFO``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.Streamplayer', '/de/tahifi/Streamplayer',
+            'de.tahifi.Streamplayer.URLFIFO')
+
+    @staticmethod
+    def streamplayer_playback():
+        """Proxy to Streamplayer (``de.tahifi.Streamplayer.Playback``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.Streamplayer', '/de/tahifi/Streamplayer',
+            'de.tahifi.Streamplayer.Playback')
