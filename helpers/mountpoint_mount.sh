@@ -37,6 +37,10 @@ set -e
 
 if /bin/mount -o ${OPTION} "${MOUNTPOINT}"
 then
+    LAF="${MOUNTPOINT}/lost+found"
+    if test ! -d "${LAF}"; then exit 0; fi
+    if test "x$(find "${LAF}" -maxdepth 0 -empty)" != x; then exit 0; fi
+    cd "${LAF}" && find . -maxdepth 1 ! -name . -exec rm -rf {} \;
     exit 0
 fi
 
