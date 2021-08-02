@@ -27,6 +27,8 @@ from threading import RLock
 from .endpoint import Endpoint, register_endpoints
 from . import get_monitor
 import strbo.dbus
+import strbo.player_control
+import strbo.player_queue
 from .utils import get_logger
 from .utils import jsonify_nc
 log = get_logger('Player')
@@ -68,7 +70,7 @@ class PlayerStatus(Endpoint):
     def __init__(self, player):
         Endpoint.__init__(
                 self, 'audio_player_status', name='audio_player_status',
-                title='Stream player status')
+                title='T+A stream player status')
         self._player = player
 
     def __enter__(self):
@@ -158,11 +160,15 @@ class PlayerStreamplayer(Endpoint):
 
     def __init__(self):
         self.player_status = PlayerStatus(self)
+        self.player_control = strbo.player_control.PlayerControl()
+        self.player_queue = strbo.player_queue.PlayerQueue()
 
 
 streamplayer_endpoint = PlayerStreamplayer()
 all_endpoints = [
     streamplayer_endpoint.player_status,
+    streamplayer_endpoint.player_control,
+    streamplayer_endpoint.player_queue,
 ]
 
 
