@@ -78,7 +78,11 @@ class ClientListener:
 
     @staticmethod
     def _read(conn, mask, sel, **kwargs):
-        data = conn.recv(1024)
+        try:
+            data = conn.recv(1024)
+        except ConnectionResetError as e:
+            log.error('Client disappeared: {}'.format(e))
+            data = b''
 
         if data == b'':
             try:
