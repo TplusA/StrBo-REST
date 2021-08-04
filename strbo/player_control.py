@@ -31,7 +31,35 @@ log = get_logger('Player')
 
 
 class PlayerControl(Endpoint):
-    """**API Endpoint** - T+A stream player control."""
+    """**API Endpoint** - T+A stream player control.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``POST``    | Send commands directly to the stream player to modify    |
+    |             | its playback state.                                      |
+    +-------------+----------------------------------------------------------+
+
+    The client shall send a JSON object containing a field named ``op`` (for
+    operation). The operation is either ``start``, ``stop``, ``pause``, or
+    ``seek``.
+
+    The ``start`` and ``pause`` operations do the obvious and do not have any
+    parameters.
+
+    The ``stop`` operation stops playback and takes an optional parameter named
+    ``reason``. The parameter is a short string which tells the developer what
+    is the reason for the stop (user hit stop, app terminated, some error, or
+    whatever).
+
+    The ``seek`` operation requires two parameters, ``position`` and ``units``,
+    or no parameters at all. Sending only one of them is an error. The
+    ``position`` is a numerical value, and ``units`` is the unit of measure for
+    ``position``. Valid units are ``s``, ``ms``, ``us``, ``ns``, and ``%``. For
+    percentage, ``position`` may be a floating point value or an integer and it
+    must be in range 0.0 through 100.0; for the other units, ``position`` must
+    be an integer which does not exceed the stream boundaries.
+    """
 
     #: Path to endpoint.
     href = '/player/player/control'
@@ -107,8 +135,20 @@ def _process_seek_request(request, req):
         if err:
             return err
 
-        pos = int(req['position'])
         units = req['units']
+
+        try:
+            if units == '%':
+                pos = float(req['position'])
+                if pos < 0.0 or pos > 100.0:
+                    raise RuntimeError()
+                pos = int(round(pos, 4) * 10000.0)
+            else:
+                pos = int(req['position'])
+                if pos < 0:
+                    raise RuntimeError()
+        except:  # noqa: E722
+            return jsonify_error(request, log, False, 400, 'Invalid position')
 
     iface = strbo.dbus.Interfaces.streamplayer_playback()
     iface.Seek(pos, units)
