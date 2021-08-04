@@ -32,7 +32,73 @@ log = get_logger('Player')
 
 
 class PlayerQueue(Endpoint):
-    """**API Endpoint** - T+A stream player queue operations."""
+    """**API Endpoint** - T+A stream player queue operations.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``POST``    | Send commands directly to the stream player to modify    |
+    |             | its internal queue.                                      |
+    +-------------+----------------------------------------------------------+
+
+    The client shall send a JSON object containing a field named ``op`` (for
+    operation). The operation is either ``push``, ``next``, ``clear``, or
+    ``query``.
+
+    The ``push`` operation places items into the stream player's queue. This
+    operation requires the JSON object to contain an ``items`` field which is
+    either an object describing the item to send to stream player, or an array
+    of such items. Each such item must contain a ``url`` field whose value is
+    the stream URL. An optional field named ``meta_data`` contains an object
+    with track information which is used in case the stream itself does not
+    contain any meta data.
+
+    The ``push`` operation knows about two more optional fields, ``keep`` and
+    ``skip_current``. The ``keep`` field contains a non-negative integer which
+    tells the stream player to keep this many items at the front of its queue
+    after which the new items are appended. If the field is missing, then the
+    new items are appended to the end of the queue. The ``skip_current`` field
+    is a flag which tells the stream player to stop playing the current item,
+    if any, and continue playing with the one just pushed. This field is
+    evaluated only if ``keep`` is set to 0.
+
+    On success, ``push`` returns a JSON object containing the fields
+    ``stream_ids`` and ``overflow``.
+
+    ``stream_ids`` is an array of integers with a length of most the length of
+    ``items`` sent in the request. An integer at position _i_ in ``stream_ids``
+    is the stream ID assigned by the Streaming Board to the item at position
+    _i_ in ``items``. In case the ``stream_ids`` array is shorter than
+    ``items``, then the trailing objects in ``items`` have not been sent to
+    stream player due to some error. They should be sent again later.
+
+    ``overflow`` is ``true`` in case the stream player queue was full when
+    trying to add another item. The ``stream_ids`` array will be shorter than
+    ``items`` in this case.
+
+    The ``next`` operation asks the stream player to skip to the next item in
+    its queue. Note that there is no jump-to-previous operation since the queue
+    built into the player is *not* a playlist. The sole reason for having a
+    queue in the stream player is to get gapless playback right. Real playlists
+    are completely out of stream player's scope.
+
+    The ``clear`` operation removes streams from the queue. Its optional field
+    ``keep`` contains a non-negative integer which tells the stream player to
+    keep this many items at the front of its queue. If the field is missing,
+    then it defaults to 0 (remove all items).
+
+    The ``clear`` operation returns a JSON object which contains the fields
+    ``playing_stream_id``, ``queued_stream_ids``, and ``removed_stream_ids``.
+    The ``playing_stream_id`` is the ID of the stream still playing after the
+    clear operation. Arrays ``queued_stream_ids`` and ``removed_stream_ids``
+    contain the stream IDs which are still in queue and the stream IDs which
+    have been removed from the queue by the ``clear`` operation, respectively.
+
+    The ``query`` operation is using the same low-level to the stream player as
+    ``clear``, but it doesn't clear anything. The JSON object in the response
+    is the same is for ``clear`` (note that ``removed_stream_ids`` is still
+    relevant here because there might be some stream ID removals pending).
+    """
 
     #: Path to endpoint.
     href = '/player/player/queue'
