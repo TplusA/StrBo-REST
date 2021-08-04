@@ -390,8 +390,10 @@ def require_fields_in_object(json_obj, fields,):
     return [f for f in fields if f not in json_obj]
 
 
-def jsonify_error_for_missing_fields(request, log, fields, is_crit=True):
-    missing = require_fields_in_object(request.json, fields)
+def jsonify_error_for_missing_fields(request, log, fields, is_crit=True, *,
+                                     j=None):
+    missing = \
+        require_fields_in_object(request.json if j is None else j, fields)
     return jsonify_error(request, log, is_crit, 400,
                          'Missing fields: {}'.format(', '.join(missing))) \
         if missing else None

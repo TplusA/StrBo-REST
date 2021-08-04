@@ -21,6 +21,7 @@
 # MA  02110-1301, USA.
 
 
+from hashlib import md5
 from threading import Lock
 
 import strbo.dbus
@@ -41,10 +42,17 @@ class PlayerQueue(Endpoint):
 
     lock = Lock()
 
+    # The number 4 is the source ID for REST API. Upper 9 bits for source ID,
+    # lower 7 bits for stream cookie.
+    _MIN_ID = (4 << 7) + 1
+    _MAX_ID = (4 << 7) + 2 ** 7 - 1
+    STREAM_ID_RANGE = _MAX_ID - _MIN_ID + 1
+
     def __init__(self):
         Endpoint.__init__(
             self, 'audio_player_queue', name='audio_player_queue',
             title='T+A stream player queue operations')
+        self._next_free_id = PlayerQueue._MIN_ID
 
     def __call__(self, request, **values):
         with self.lock:
@@ -56,7 +64,9 @@ class PlayerQueue(Endpoint):
             opname = req['op']
 
             if opname == 'push':
-                return _process_push_request(request, req)
+                return _process_push_request(request, req,
+                                             self._get_free_stream_id,
+                                             PlayerQueue.STREAM_ID_RANGE)
 
             if opname == 'next':
                 return _process_next_request(request)
@@ -78,14 +88,23 @@ class PlayerQueue(Endpoint):
         self.lock.release()
         return False
 
+    def _get_free_stream_id(self):
+        result = self._next_free_id
 
-def fixup_stream_id(id):
-    return id if id < 2**32 - 1 else None
+        if self._next_free_id < PlayerQueue._MAX_ID:
+            self._next_free_id += 1
+        else:
+            self._next_free_id = PlayerQueue._MIN_ID
+
+        return result
 
 
-def _process_push_request(request, req):
-    required_fields = ('stream_id', 'url', 'stream_key')
-    err = jsonify_error_for_missing_fields(request, log, required_fields)
+def fixup_stream_id(stream_id):
+    return stream_id if stream_id < 2**32 - 1 else None
+
+
+def _process_push_request(request, req, get_new_stream_id, max_items_count):
+    err = jsonify_error_for_missing_fields(request, log, ('items',))
     if err:
         return err
 
@@ -96,22 +115,67 @@ def _process_push_request(request, req):
     else:
         keep_first_n_entries = -1
 
-    preset_meta_data = req.get('meta_data', None)
-
-    if preset_meta_data:
-        log.warning('Preset meta data for raw streams not implemented yet')
-
     iface = strbo.dbus.Interfaces.streamplayer_urlfifo()
-    fifo_overflow, _ = \
-        iface.Push(int(req['stream_id']), req['url'],
-                   bytearray.fromhex(req['stream_key']),
-                   0, 'ms', 0, 'ms',
-                   keep_first_n_entries)
 
-    if fifo_overflow:
-        return jsonify_error(request, None, False, 503, 'Queue overflow')
+    def check_item(item):
+        err = jsonify_error_for_missing_fields(request, log, ('url',), j=item)
+        if err:
+            return err
 
-    return jsonify_nc(request)
+        if not item['url']:
+            return jsonify_error(request, log, False, 400, 'Empty "url"')
+
+        return None
+
+    def push_item_to_player(item, stream_ids):
+        stream_id = get_new_stream_id()
+        stream_key = md5(item['url'].encode()).digest()
+        preset_meta_data = item.get('meta_data', None)
+
+        if preset_meta_data:
+            log.warning('Preset meta data for raw streams not implemented yet')
+
+        fifo_overflow, _ = iface.Push(stream_id, item['url'], stream_key,
+                                      0, 'ms', 0, 'ms', keep_first_n_entries)
+
+        if fifo_overflow:
+            log.error('Stream player queue overflow, '
+                      'some streams have not been pushed')
+        else:
+            stream_ids.append(stream_id)
+
+        return fifo_overflow
+
+    items = req['items']
+    stream_ids = []
+    overflow = False
+
+    if isinstance(items, list):
+        if len(items) > max_items_count:
+            return \
+                jsonify_error(request, log, False, 400,
+                              'Cannot push more than {} URLs '
+                              '(stream IDs exhausted)'
+                              .format(max_items_count))
+
+        for item in items:
+            err = check_item(item)
+            if err:
+                return err
+
+        for item in items:
+            overflow = push_item_to_player(item, stream_ids)
+            if overflow:
+                break
+            keep_first_n_entries = -1
+    elif isinstance(items, dict):
+        err = check_item(items)
+        if err:
+            return err
+
+        overflow = push_item_to_player(items, stream_ids)
+
+    return jsonify_nc(request, stream_ids=stream_ids, overflow=overflow)
 
 
 def _process_next_request(request):
