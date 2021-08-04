@@ -22,6 +22,7 @@
 
 import threading
 import dbus
+import dbus.service
 
 from dbus.mainloop.glib import DBusGMainLoop, threads_init
 from gi.repository import GLib
@@ -95,6 +96,7 @@ class Bus(dbus.bus.BusConnection):
         bus = dbus.bus.BusConnection.__new__(Bus,
                                              'unix:path=/tmp/strbo_bus_socket',
                                              mainloop=mainloop)
+        bus._bus_name = None
 
         if not private:
             cls._shared_instance = bus
@@ -103,11 +105,15 @@ class Bus(dbus.bus.BusConnection):
 
     def close(self):
         """Shut down D-Bus."""
+        self._bus_name = None
         if Bus._shared_instance is self:
             Bus._shared_instance = None
         super(Bus, self).close()
 
         Bus._dbus_handler.stop()
+
+    def register_bus_name(self, name):
+        self._bus_name = dbus.service.BusName(name, self)
 
     def __repr__(self):
         return '<%s.%s (StrBo) at %#x>' % (Bus.__module__, Bus.__name__,
