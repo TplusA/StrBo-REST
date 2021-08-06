@@ -413,10 +413,39 @@ class Monitor:
                 self.client_listener.kick_client(c)
 
     def send_event(self, event_name, json_object, **kwargs):
+        """Send a generic event to all listening clients.
+
+        This method adds the field `event` to the object and assigns it the
+        value passed in `event_name`.
+
+        See :meth:`Monitor.send_object` for `kwargs` documentation.
+        """
         json_object['event'] = event_name
         self.send_object(json_object, **kwargs)
 
+    def send_error_object(self, error_object, **kwargs):
+        """Send an event which contains an error object.
+
+        Ideally, but not necessarily, the error object would have been built by
+        :meth:`strbo.utils.mk_error_object`. This method adds the field `event`
+        to the error object and assigns it the value `error`.
+
+        See :meth:`Monitor.send_object` for `kwargs` documentation.
+        """
+        error_object['event'] = 'error'
+        self.send_object(error_object)
+
     def send_object(self, json_object, **kwargs):
+        """Send a generic object to all listening clients.
+
+        In case `kwargs` contains `ep`, then a field named `endpoint` is added
+        to the object which contains a JSON representation of that endpoint,
+        serialized by :class:`strbo.endpoint.EndpointSchema`.
+
+        Note: usually, this method is not called directly. Consider using
+        :meth:`send_event` or :meth:`send_error_object` before resorting to
+        this method.
+        """
         if isinstance(json_object, dict):
             ep = kwargs.get('ep')
             if ep:
