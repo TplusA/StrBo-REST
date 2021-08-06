@@ -44,6 +44,8 @@ from .listbrowse import all_endpoints as all_listbrowse_endpoints
 from .listbrowse import add_endpoints as add_listbrowse_endpoints
 from .player import all_endpoints as all_player_endpoints
 from .player import add_endpoints as add_player_endpoints
+from .player_meta import all_endpoints as all_player_meta_endpoints
+from .player_meta import add_endpoints as add_player_meta_endpoints
 
 from .dbus import Bus
 from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
@@ -124,6 +126,7 @@ class EntryPoint(Endpoint):
         self.network_config = all_network_config_endpoints
         self.audio_sources = all_listbrowse_endpoints
         self.audio_player = all_player_endpoints
+        self.audio_player += all_player_meta_endpoints
 
     def __call__(self, request, **values):
         return jsonify(request, EntryPointSchema.serialize(self))
@@ -188,6 +191,7 @@ class StrBo:
         add_network_config_endpoints()
         add_listbrowse_endpoints()
         add_player_endpoints()
+        add_player_meta_endpoints()
 
         log.info('Up and running')
 

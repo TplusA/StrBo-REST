@@ -249,3 +249,10 @@ class Interfaces:
         return Interfaces._cache.get_interface(
             'de.tahifi.Streamplayer', '/de/tahifi/Streamplayer',
             'de.tahifi.Streamplayer.Playback')
+
+    @staticmethod
+    def audio_path_manager():
+        """Proxy to T+A Player Switch (``de.tahifi.AudioPath.Manager``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.TAPSwitch', '/de/tahifi/TAPSwitch',
+            'de.tahifi.AudioPath.Manager')
