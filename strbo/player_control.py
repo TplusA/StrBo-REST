@@ -59,6 +59,16 @@ class PlayerControl(Endpoint):
     percentage, ``position`` may be a floating point value or an integer and it
     must be in range 0.0 through 100.0; for the other units, ``position`` must
     be an integer which does not exceed the stream boundaries.
+
+    Since there can be only one actor in charge of control of the stream
+    player, access is blocked for passive actors. The active actor must
+    identify itself by passing its session key it has received on audio source
+    selection (see :class:`strbo.player_meta.PlayerMeta`) in the ``secret_key``
+    field. In case the request succeeds, the client is still the active actor.
+    In case permission is denied, the request fails with status code 403, and
+    the client shall mark itself as passive actor. Changes of active actors are
+    communicated as events through the event socket (see
+    :class:`strbo.monitor.Monitor`).
     """
 
     #: Path to endpoint.
@@ -69,13 +79,18 @@ class PlayerControl(Endpoint):
 
     lock = Lock()
 
-    def __init__(self):
+    def __init__(self, parent_player_endpoint):
         Endpoint.__init__(
             self, 'audio_player_control', name='audio_player_control',
             title='T+A stream player control')
+        self._player = parent_player_endpoint
 
     def __call__(self, request, **values):
         with self.lock:
+            err = self._player.check_authorization(request, 'player control')
+            if err:
+                return err
+
             req = request.json
 
             if 'op' not in req:

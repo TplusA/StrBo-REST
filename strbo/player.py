@@ -30,7 +30,7 @@ import strbo.dbus
 import strbo.player_control
 import strbo.player_queue
 from .utils import get_logger
-from .utils import jsonify_nc
+from .utils import jsonify_nc, jsonify_error
 log = get_logger('Player')
 
 
@@ -154,14 +154,48 @@ class PlayerStatus(Endpoint):
 
 
 class PlayerStreamplayer(Endpoint):
-    """Collection of stream player API endpoints and related data."""
+    """Collection of stream player API endpoints and related data.
+
+    The secret key for direct player control is managed by this class as well.
+    """
 
     lock = RLock()
 
     def __init__(self):
         self.player_status = PlayerStatus(self)
-        self.player_control = strbo.player_control.PlayerControl()
-        self.player_queue = strbo.player_queue.PlayerQueue()
+        self.player_control = strbo.player_control.PlayerControl(self)
+        self.player_queue = strbo.player_queue.PlayerQueue(self)
+        self._secret_key = None
+
+    def clear_secret_key(self):
+        """Remove the secret key for access control."""
+        self._secret_key = None
+
+    def set_secret_key(self, key: int):
+        """Set the secret key for access control."""
+        self._secret_key = key
+
+    def check_authorization(self, request, what):
+        req = request.json
+
+        if self.access_granted(req.get('secret_key', None)):
+            return None
+
+        log.error('Blocked unauthorized {} from {}'
+                  .format(what, request.environ.get('REMOTE_ADDR', None)))
+        return jsonify_error(request, log, False, 403,
+                             'Wrong key' if 'secret_key' in req
+                             else 'Missing secret_key')
+
+    def access_granted(self, key) -> bool:
+        """Check if the given key matches the secret key."""
+        if self._secret_key is None:
+            return False
+
+        try:
+            return int(key) == self._secret_key
+        except (TypeError, ValueError):
+            return False
 
 
 streamplayer_endpoint = PlayerStreamplayer()

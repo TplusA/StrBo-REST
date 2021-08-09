@@ -130,6 +130,7 @@ class PlayerMeta(Endpoint):
 
         self._active_actor = None
         self._actor_activation = None
+        self._streamplayer_endpoint = None
 
         # this is our own state in the role of an audio source
         self._rest_audio_source_state = AudioSourceState.PASSIVE
@@ -186,6 +187,9 @@ class PlayerMeta(Endpoint):
                             error_handler=self._request_source_error)
         return response
 
+    def set_streamplayer_endpoint(self, ep):
+        self._streamplayer_endpoint = ep
+
     def _actor_activation_done(self, switched=False, *,
                                e=None, aborted=False):
         if self._actor_activation is None:
@@ -216,7 +220,7 @@ class PlayerMeta(Endpoint):
 
         self._actor_activation = None
 
-    def _set_active_actor(self, actor):
+    def _set_active_actor(self, actor: _ActiveActor):
         if self._active_actor:
             prev_id = self._active_actor.owner_id
             prev_addr_available = hasattr(self._active_actor, 'address')
@@ -236,8 +240,16 @@ class PlayerMeta(Endpoint):
         if prev_addr_available:
             msg['previous_address'] = prev_addr
 
-        if hasattr(actor, 'address'):
-            msg['address'] = actor.address
+        if actor:
+            if hasattr(actor, 'session_key') and actor.session_key > 0:
+                self._streamplayer_endpoint.set_secret_key(actor.session_key)
+            else:
+                self._streamplayer_endpoint.clear_secret_key()
+
+            if hasattr(actor, 'address'):
+                msg['address'] = actor.address
+        else:
+            self._streamplayer_endpoint.clear_secret_key()
 
         get_monitor().send_event('rest_audio_source_owner', msg)
 
@@ -335,6 +347,9 @@ def signal__audio_path_activated(source_id, player_id):
 
 
 def add_endpoints():
+    from strbo.player import streamplayer_endpoint
+    player_meta.set_streamplayer_endpoint(streamplayer_endpoint)
+
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
 

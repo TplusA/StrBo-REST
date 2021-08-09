@@ -98,6 +98,16 @@ class PlayerQueue(Endpoint):
     ``clear``, but it doesn't clear anything. The JSON object in the response
     is the same is for ``clear`` (note that ``removed_stream_ids`` is still
     relevant here because there might be some stream ID removals pending).
+
+    Since there can be only one actor in charge of control of the stream
+    player, access is blocked for passive actors. The active actor must
+    identify itself by passing its session key it has received on audio source
+    selection (see :class:`strbo.player_meta.PlayerMeta`) in the ``secret_key``
+    field. In case the request succeeds, the client is still the active actor.
+    In case permission is denied, the request fails with status code 403, and
+    the client shall mark itself as passive actor. Changes of active actors are
+    communicated as events through the event socket (see
+    :class:`strbo.monitor.Monitor`).
     """
 
     #: Path to endpoint.
@@ -114,14 +124,20 @@ class PlayerQueue(Endpoint):
     _MAX_ID = (4 << 7) + 2 ** 7 - 1
     STREAM_ID_RANGE = _MAX_ID - _MIN_ID + 1
 
-    def __init__(self):
+    def __init__(self, parent_player_endpoint):
         Endpoint.__init__(
             self, 'audio_player_queue', name='audio_player_queue',
             title='T+A stream player queue operations')
+        self._player = parent_player_endpoint
         self._next_free_id = PlayerQueue._MIN_ID
 
     def __call__(self, request, **values):
         with self.lock:
+            err = self._player.check_authorization(request,
+                                                   'player queue command')
+            if err:
+                return err
+
             req = request.json
 
             if 'op' not in req:
