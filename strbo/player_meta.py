@@ -29,10 +29,11 @@ import halogen
 import random
 
 import strbo.dbus
+import strbo.player_control
 from .endpoint import Endpoint, register_endpoints
 from .utils import get_logger
 from .utils import jsonify_nc
-from .utils import jsonify_error_for_missing_fields
+from .utils import jsonify_error, jsonify_error_for_missing_fields
 from .utils import mk_error_object
 from . import get_monitor
 log = get_logger('Player')
@@ -102,6 +103,9 @@ class _ActiveActor:
 
         if address:
             self.address = address
+
+    def is_rest_client(self) -> bool:
+        return hasattr(self, 'session_key') and hasattr(self, 'address')
 
 
 class _AudioSourceItem:
@@ -251,7 +255,12 @@ class PlayerMeta(Endpoint):
         else:
             self._streamplayer_endpoint.clear_secret_key()
 
-        get_monitor().send_event('rest_audio_source_owner', msg)
+        mon = get_monitor()
+        mon.invalidate_client_id(prev_id)
+        mon.send_event('rest_audio_source_owner', msg)
+
+    def get_active_actor(self) -> _ActiveActor:
+        return self._active_actor
 
     def _request_source_done(self, player_id, switched):
         with self.lock:
@@ -336,8 +345,163 @@ class DBusAudioSource(dbus.service.Object):
         log.error('Registering audio source failed: {}'.format(str(e)))
 
 
+class PlayerMetaRequestsDBus(dbus.service.Object):
+    """Implements DCPD signal emitters for controlling playback.
+
+    The signals are those from the de.tahifi.Dcpd.Playback interface so that
+    DRCPD and TARoon can understand them straightaway.
+    """
+    iface = 'de.tahifi.Dcpd.Playback'
+
+    def __init__(self, object_path: str):
+        dbus.service.Object.__init__(self, strbo.dbus.Bus(), object_path)
+
+    @dbus.service.signal(dbus_interface=iface)
+    def Start(self): pass
+    @dbus.service.signal(dbus_interface=iface)
+    def Stop(self): pass
+    @dbus.service.signal(dbus_interface=iface)
+    def Pause(self): pass
+    @dbus.service.signal(dbus_interface=iface)
+    def Resume(self): pass
+    @dbus.service.signal(dbus_interface=iface)
+    def Next(self): pass
+    @dbus.service.signal(dbus_interface=iface)
+    def Previous(self): pass
+    @dbus.service.signal(dbus_interface=iface, signature='xs')
+    def Seek(self, position, units): pass
+
+
+class PlayerMetaRequests(Endpoint):
+    """**API Endpoint** - Playback-related requests to the active actor.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``POST``    | Send requests for taking influence on playback. These    |
+    |             | requests are forwarded to the active actor which decides |
+    |             | what to do with them.                                    |
+    +-------------+----------------------------------------------------------+
+
+    A request is sent by sending a request name in field ``op``, and any
+    parameters in the fields required by the request.
+
+    Valid values for ``op`` are ``start``, ``stop``, ``pause``, ``resume``,
+    ``seek``, ``skip_forward``, and ``skip_backward``. Other requests are
+    rejected with HTTP status 400. Requests ``stop`` and ``seek`` are the only
+    ones which expect parameters, and they will fail with HTTP status 400 in
+    case their are malformed.
+
+    For the ``stop`` request, an optional ``reason`` field may be set which
+    tells the callee why the playback has been stopped. This is purely for
+    diagnostic purposes.
+
+    For the ``seek`` request, the position can be specified in fields
+    ``position`` and ``units``. See :class:`strbo.player_control.PlayerControl`
+    for more details.
+
+    In case there is no active actor, the request fails with HTTP status 503.
+    A successfully forwarded playback request is responded to with HTTP status
+    202.
+
+    In case the active actor is a REST client, the full request object is
+    forwarded to that actor as is. The active actor is responsible for input
+    validation and taking further actions required to fulfill or reject the
+    request. The HTTP response with status code 202 contains a small JSON
+    object which tells the caller which client ID the request has been
+    forwarded to (primarily useful for debugging). The successful response only
+    means that the request has been forwarded; it tells the caller nothing
+    about how or when the request is going to be processed.
+
+    In case the active actor is a StrBo process, the request is turned into
+    D-Bus signals. The processes are responsible for listening to those signals
+    and taking further actions. The successful HTTP response contains no
+    content in this case.
+    """
+
+    #: Path to endpoint.
+    href = '/player/meta/requests'
+
+    #: Supported HTTP methods.
+    methods = ('POST',)
+
+    def __init__(self, parent_meta_ep):
+        Endpoint.__init__(
+            self, 'player_requests', name='player_requests',
+            title='Requests forwarded to the active actor')
+        self._meta_ep = parent_meta_ep
+        self._dbus_playback_signals = None
+        self._dbus_signals_map = None
+
+    def set_dbus_playback_signals(self, sigs: PlayerMetaRequestsDBus):
+        self._dbus_playback_signals = sigs
+        self._dbus_signals_map = {
+            'start': self._dbus_playback_signals.Start,
+            'stop': self._dbus_playback_signals.Stop,
+            'pause': self._dbus_playback_signals.Pause,
+            'resume': self._dbus_playback_signals.Resume,
+            'skip_forward': self._dbus_playback_signals.Next,
+            'skip_backward': self._dbus_playback_signals.Previous,
+        }
+
+    def __call__(self, request, **values):
+        err = jsonify_error_for_missing_fields(request, log, ('op',))
+        if err:
+            return err
+
+        opname = request.json['op']
+
+        with self._meta_ep as meta:
+            aa = meta.get_active_actor()
+            if not aa:
+                return jsonify_error(request, log, False, 503,
+                                     'No active actor, cannot forward '
+                                     'player request {}'.format(opname))
+
+            if opname not in ('start', 'stop', 'pause', 'resume', 'seek',
+                              'skip_forward', 'skip_backward'):
+                return jsonify_error(request, log, False, 400,
+                                     'Unknown op "{}"'.format(opname))
+
+            if not aa.is_rest_client():
+                return self._forward_request_to_strbo(aa, request)
+
+            get_monitor().send_event('player_request', request.json,
+                                     target_client_id=aa.owner_id)
+            return jsonify_nc(request, status_code=202,
+                              client_id=aa.owner_id)
+
+    def _forward_request_to_strbo(self, aa: _ActiveActor, request):
+        req = request.json
+        opname = req['op']
+        fun = self._dbus_signals_map.get(opname, None)
+
+        if fun:
+            fun()
+        elif opname == 'seek':
+            err = strbo.player_control.check_seek_request_parameters(request,
+                                                                     req)
+            if err:
+                return err
+
+            try:
+                pos, units = \
+                    strbo.player_control.get_seek_request_parameters(req)
+            except:  # noqa: E722
+                return jsonify_error(request, log, False, 400,
+                                     'Invalid seek request')
+
+            self._dbus_playback_signals.Seek(pos, units)
+        else:
+            return jsonify_error(request, log, True, 501,
+                                 'Op {} not implemented'.format(opname))
+
+        return jsonify_nc(request, status_code=202)
+
+
 player_meta = PlayerMeta()
-all_endpoints = [player_meta]
+player_meta_requests = PlayerMetaRequests(player_meta)
+all_endpoints = [player_meta, player_meta_requests]
 dbus_audio_source = None
 
 
@@ -352,6 +516,9 @@ def add_endpoints():
 
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
+
+    player_meta_requests.set_dbus_playback_signals(
+                                PlayerMetaRequestsDBus('/de/tahifi/REST_DCPD'))
 
     global dbus_audio_source
     dbus_audio_source = DBusAudioSource('/de/tahifi/REST', player_meta)

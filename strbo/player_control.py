@@ -140,30 +140,42 @@ def _process_pause_request(request):
     return jsonify_nc(request)
 
 
-def _process_seek_request(request, req):
+def check_seek_request_parameters(request, req):
     if 'position' not in req and 'units' not in req:
-        pos = 0
-        units = 'ms'
+        return None
+
+    required_fields = ('position', 'units')
+    return jsonify_error_for_missing_fields(request, log, required_fields)
+
+
+def get_seek_request_parameters(req):
+    if 'position' not in req and 'units' not in req:
+        return 0, 'ms'
+
+    units = req['units']
+
+    if units == '%':
+        pos = float(req['position'])
+        if pos < 0.0 or pos > 100.0:
+            raise RuntimeError()
+        pos = int(round(pos, 4) * 10000.0)
     else:
-        required_fields = ('position', 'units')
-        err = jsonify_error_for_missing_fields(request, log, required_fields)
-        if err:
-            return err
+        pos = int(req['position'])
+        if pos < 0:
+            raise RuntimeError()
 
-        units = req['units']
+    return pos, units
 
-        try:
-            if units == '%':
-                pos = float(req['position'])
-                if pos < 0.0 or pos > 100.0:
-                    raise RuntimeError()
-                pos = int(round(pos, 4) * 10000.0)
-            else:
-                pos = int(req['position'])
-                if pos < 0:
-                    raise RuntimeError()
-        except:  # noqa: E722
-            return jsonify_error(request, log, False, 400, 'Invalid position')
+
+def _process_seek_request(request, req):
+    err = check_seek_request_parameters(request, req)
+    if err:
+        return err
+
+    try:
+        pos, units = get_seek_request_parameters(req)
+    except:  # noqa: E722
+        return jsonify_error(request, log, False, 400, 'Invalid position')
 
     iface = strbo.dbus.Interfaces.streamplayer_playback()
     iface.Seek(pos, units)
