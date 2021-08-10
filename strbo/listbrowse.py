@@ -47,6 +47,9 @@ class AudioSourceSchemaShort(halogen.Schema):
     #: ID of the audio service
     id = halogen.Attr()
 
+    #: Description of the audio source
+    title = halogen.Attr()
+
 
 class AudioSourceSchema(halogen.Schema):
     """Short representation of :class:`AudioSource`."""
@@ -54,8 +57,11 @@ class AudioSourceSchema(halogen.Schema):
     #: Link to self.
     self = halogen.Link(attr=lambda value: '/sources/' + value.id)
 
-    #: ID of the audio service
+    #: ID of the audio source
     id = halogen.Attr()
+
+    #: Description of the audio source
+    title = halogen.Attr()
 
     #: List of browsable lists
     lists = halogen.Attr()
@@ -114,8 +120,11 @@ class USBAudioSourceSchema(halogen.Schema):
     #: Link to self.
     self = halogen.Link(attr=lambda value: '/sources/' + value.id)
 
-    #: ID of the audio service
+    #: ID of the audio source
     id = halogen.Attr()
+
+    #: Description of the audio source
+    title = halogen.Attr()
 
     #: List of browsable lists
     lists = halogen.Attr()
