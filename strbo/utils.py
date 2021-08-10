@@ -170,7 +170,7 @@ def is_process_running(pid_file, delete_if_not_running=True):
             pid = int(f.readline().strip())
     except FileNotFoundError:
         return False
-    except:  # noqa: 722
+    except:  # noqa: E722
         pass
 
     running = pid is not None and (Path('/proc') / str(pid)).is_dir()

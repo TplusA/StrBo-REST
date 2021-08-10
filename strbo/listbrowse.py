@@ -250,7 +250,7 @@ def get_offset_and_page_and_maximum_size(args):
     try:
         size = int(size)
         page = int(page)
-    except:  # noqa: 722
+    except:  # noqa: E722
         return None, -1, -1
 
     if size < 0 or page < 0:
