@@ -301,7 +301,9 @@ def jsonify(is_utf8_ok, *args, **kwargs):
 
     The values in `args` and `kwargs` are passed to :func:`json.dumps`, and its
     outcome is packed into a newly created :class:`werkzeug.wrappers.Response`
-    instance which is returned by this function
+    instance which is returned by this function. In case they contain the key
+    ``status_code``, it will be removed from the dictionary and used as HTTP
+    response status code.
     """
     if args and kwargs:
         raise TypeError(
@@ -320,8 +322,15 @@ def jsonify(is_utf8_ok, *args, **kwargs):
     else:
         use_utf8 = is_utf8_ok
 
-    return _pack_json_into_response(json.dumps(data, skipkeys=True,
-                                               ensure_ascii=not use_utf8))
+    status_code = data.get('status_code', None)
+    if status_code is None:
+        return _pack_json_into_response(json.dumps(data, skipkeys=True,
+                                                   ensure_ascii=not use_utf8))
+    else:
+        del data['status_code']
+        return _pack_json_into_response(json.dumps(data, skipkeys=True,
+                                                   ensure_ascii=not use_utf8),
+                                        int(status_code))
 
 
 def jsonify_e(is_utf8_ok, etag, max_age, *args, **kwargs):
