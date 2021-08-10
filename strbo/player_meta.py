@@ -61,26 +61,12 @@ class ActiveActorSchema(halogen.Schema):
     address = halogen.Attr(required=False)
 
 
-class AudioSourceSchema(halogen.Schema):
-    """Representation of an audio source in the list of known audio sources."""
-
-    #: What the audio source is all about
-    description = halogen.Attr()
-
-
 class PlayerMetaSchema(halogen.Schema):
     """Representation of :class:`PlayerMeta`."""
 
     owner = halogen.Attr(
         halogen.types.Nullable(ActiveActorSchema),
         attr=lambda value: value._active_actor
-    )
-
-    audio_sources = halogen.Attr(
-        attr=lambda value: {
-            sid: AudioSourceSchema.serialize(src)
-            for sid, src in value._known_audio_sources.items()
-        }
     )
 
     active_audio_source =\
@@ -106,12 +92,6 @@ class _ActiveActor:
 
     def is_rest_client(self) -> bool:
         return hasattr(self, 'session_key') and hasattr(self, 'address')
-
-
-class _AudioSourceItem:
-    """Information about an audio source."""
-    def __init__(self, description):
-        self.description = description
 
 
 class PlayerMeta(Endpoint):
@@ -141,8 +121,6 @@ class PlayerMeta(Endpoint):
 
         # this is the active audio path as reported by TAPSwitch
         self._active_audio_path = (None, None)
-
-        self._known_audio_sources = {}
 
     def __enter__(self):
         self.lock.acquire()
@@ -291,9 +269,6 @@ class PlayerMeta(Endpoint):
                 'audio_source_id': self._active_audio_path[0],
                 'audio_player_id': self._active_audio_path[1],
         })
-
-    def add_audio_source(self, source_id, description):
-        self._known_audio_sources[source_id] = _AudioSourceItem(description)
 
 
 class DBusAudioSource(dbus.service.Object):
@@ -526,24 +501,5 @@ def add_endpoints():
     iface = strbo.dbus.Interfaces.audio_path_manager()
     iface.connect_to_signal('PathActivated', signal__audio_path_activated)
     dbus_audio_source.register_audio_source(iface)
-
-    def fetch_audio_sources():
-        usable, incomplete = iface.GetPaths()
-        if incomplete:
-            log.warning('TODO: Have incomplete audio paths, '
-                        'need to check back later')
-
-        def put_audio_source(source_id):
-            if source_id:
-                source_name, _, _, _ = iface.GetSourceInfo(source_id)
-                player_meta.add_audio_source(source_id, source_name)
-
-        for p in usable:
-            put_audio_source(p[0])
-        for p in incomplete:
-            put_audio_source(p[0])
-
-    fetch_audio_sources()
-
     source_id, player_id = iface.GetCurrentPath()
     player_meta.set_audio_path_participants(source_id, player_id)
