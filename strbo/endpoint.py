@@ -205,7 +205,7 @@ class Endpoint:
 
             #: Similar to :attr:`href`, but using :mod:`werkzeug` syntax for
             #: URL routing. If :attr:`href` contains a plain URI, then this
-            #: attribute shall not be #: present at all. As with :attr:`href`,
+            #: attribute shall not be present at all. As with :attr:`href`,
             #: static definition of :attr:`href_for_map` in the derived class
             #: is preferable over passing it through the constructor.
             self.href_for_map = href_for_map
