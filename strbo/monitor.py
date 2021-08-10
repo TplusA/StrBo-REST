@@ -37,6 +37,10 @@ class Client:
     def __init__(self):
         self._input_buffer = bytearray()
 
+        # this is filled in by the client when it introduces itself over the
+        # WebSocket connection
+        self.client_id = 0
+
     def append_data(self, data):
         self._input_buffer += bytearray(data)
 
@@ -47,6 +51,10 @@ class Client:
         result = self._input_buffer
         self._input_buffer = bytearray()
         return result
+
+    def invalidate_ownership(self, client_id):
+        if self.client_id == client_id:
+            self.client_id = 0
 
 
 class ClientListener:
@@ -97,7 +105,8 @@ class ClientListener:
             return
 
         from . import get_monitor
-        client = get_monitor().get_client_by_connection(conn)
+        clients_manager = get_monitor()
+        client = clients_manager.get_client_by_connection(conn)
 
         while data:
             pos = data.find(b'\0')
@@ -125,7 +134,28 @@ class ClientListener:
                     msg = None
 
             if msg is not None:
-                log.info('Client msg: {}'.format(msg))
+                ClientListener._handle_websocket_message(msg, conn,
+                                                         clients_manager)
+
+    @staticmethod
+    def _handle_websocket_message(msg, conn, clients_manager):
+        try:
+            log.info('Client message from {}: {}'
+                     .format(conn.getpeername(), msg))
+        except:  # noqa: E722
+            log.info('Client message from <unknown>: {}'.format(msg))
+
+        opname = msg.get('op', None)
+        if opname is None:
+            return
+
+        if opname == 'register':
+            client_id = int(msg.get('client_id', 0))
+
+            if client_id > 0:
+                clients_manager.set_client_id(conn, client_id)
+            else:
+                clients_manager.unset_client_id(conn)
 
     def kick_client(self, conn):
         ClientListener._read(conn, None, self.sel,
@@ -181,12 +211,14 @@ class EndpointEvent(Event):
     def __init__(self, endpoint, **kwargs):
         super().__init__(**kwargs)
         self.endpoint = endpoint
+        self.target_client_id = kwargs.get('target_client_id', None)
 
 
 class ObjectEvent(Event):
     def __init__(self, json_object, **kwargs):
         super().__init__(**kwargs)
         self.json_object = json_object
+        self.target_client_id = kwargs.get('target_client_id', None)
 
 
 def _send_message_to_client(bytes, conn):
@@ -247,11 +279,14 @@ class EventDispatcher:
             try:
                 if isinstance(ev, EndpointEvent):
                     message = ev.endpoint.get_json(**ev.kwargs)
+                    client_id = ev.target_client_id
                 elif isinstance(ev, ObjectEvent):
                     message = ev.json_object
+                    client_id = ev.target_client_id
                 else:
                     log.error('Unhandled event type {}' .format(type(ev)))
                     message = None
+                    client_id = None
             except (SerializeError, EmptyError) as e:
                 log.error('Endpoint exception while processing event: {}'
                           .format(e.message))
@@ -269,18 +304,26 @@ class EventDispatcher:
             message_as_bytes = bytes(message, 'UTF-8')
             bad_connections = []
 
-            with clients_manager as clients:
-                log.debug('Send event to {} clients'.format(len(clients)))
+            def send_to_connection(c):
+                try:
+                    _send_message_to_client(message_as_bytes, c)
+                except Exception as e:
+                    log.error('Error while sending data to client {}: {}'
+                              .format(c, e))
+                    bad_connections.append(c)
 
-                for c in clients:
-                    log.debug('Send to {}'.format(c))
+            if client_id is None:
+                with clients_manager as clients:
+                    log.debug('Send event to {} clients'.format(len(clients)))
 
-                    try:
-                        _send_message_to_client(message_as_bytes, c)
-                    except Exception as e:
-                        log.error('Error while sending data to client {}: {}'
-                                  .format(c, e))
-                        bad_connections.append(c)
+                    for c in clients:
+                        log.debug('Send to {}'.format(c))
+                        send_to_connection(c)
+            else:
+                c = clients_manager.get_connection_by_client_id(client_id)
+                if c:
+                    log.debug('Send event to client {}'.format(client_id))
+                    send_to_connection(c)
 
             if bad_connections:
                 clients_manager._handle_bad_connections(bad_connections)
@@ -372,6 +415,31 @@ class Monitor:
         with self._lock:
             return self.clients[conn]
 
+    def get_connection_by_client_id(self, client_id):
+        with self._lock:
+            for conn, client in self.clients.items():
+                if client.client_id == client_id:
+                    return conn
+
+            return None
+
+    def set_client_id(self, conn, client_id):
+        with self._lock:
+            client = self.clients[conn]
+            if client:
+                client.client_id = client_id
+
+    def unset_client_id(self, conn):
+        self.set_client_id(conn, 0)
+
+    def invalidate_client_id(self, client_id):
+        with self._lock:
+            if not self.clients:
+                return
+
+            for client in self.clients.values():
+                client.invalidate_ownership(client_id)
+
     def _add_client(self, conn):
         """Callback for :class:`ClientListener`, called for each new client.
 
@@ -442,6 +510,11 @@ class Monitor:
         to the object which contains a JSON representation of that endpoint,
         serialized by :class:`strbo.endpoint.EndpointSchema`.
 
+        In case `kwargs` contains ``target_client_id``, then this shall be the
+        client ID of the client that should receive the ``json_object``. That
+        is, the object is not sent to all connected clients, but only to a
+        single one.
+
         Note: usually, this method is not called directly. Consider using
         :meth:`send_event` or :meth:`send_error_object` before resorting to
         this method.
@@ -464,6 +537,10 @@ class Monitor:
         object of type :class:`strbo.endpoint.Endpoint`. This event is stored
         in an internal queue which is processed by a thread dedicated to
         sending events to clients.
+
+        In case `kwargs` contains ``target_client_id``, then the endpoint is
+        not sent to all clients, but only to the one with the client ID passed
+        in ``target_client_id``.
 
         This method usually returns fast unless the event queue is congested.
         In case of congestion, this method will block until there is an empty
