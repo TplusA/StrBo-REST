@@ -65,7 +65,7 @@ class AudioSourceSchema(halogen.Schema):
     title = halogen.Attr()
 
     #: List of browsable lists
-    lists = halogen.Attr()
+    lists = halogen.Attr(required=False)
 
 
 class AudioSource(Endpoint):
@@ -77,12 +77,14 @@ class AudioSource(Endpoint):
 
     lock = RLock()
 
-    #: List of browsable lists
-    lists = []
-
-    def __init__(self, id, endpoint_title, endpoint_id, *, auto_register=True):
+    def __init__(self, id, endpoint_title, endpoint_id, *, auto_register=True,
+                 is_browsable=True):
         super().__init__(endpoint_id, name=endpoint_id, title=endpoint_title)
         self.id = id
+
+        if is_browsable:
+            #: List of browsable lists
+            self.lists = []
 
         if auto_register:
             register_endpoint(self)
@@ -241,9 +243,12 @@ class AudioSources(Endpoint):
             self._all_audio_sources[source_id] = \
                 USBAudioSource(source_id, source_name)
         else:
+            is_browsable = \
+                source_id not in ('roon', 'strbo.plainurl', 'strbo.rest')
             api_id = 'audio_source_' + source_id.replace('.', '_')
             self._all_audio_sources[source_id] = \
-                AudioSource(source_id, source_name, api_id)
+                AudioSource(source_id, source_name, api_id,
+                            is_browsable=is_browsable)
 
 
 class ListBrowsersSchema(halogen.Schema):
