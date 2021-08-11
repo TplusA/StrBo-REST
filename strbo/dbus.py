@@ -230,6 +230,13 @@ class Interfaces:
                                                'de.tahifi.Dcpd.Network')
 
     @staticmethod
+    def dcpd_playback():
+        """Proxy to DCPD playback requests (``de.tahifi.Dcpd.Playback``)."""
+        return Interfaces._cache.get_interface('de.tahifi.Dcpd',
+                                               '/de/tahifi/Dcpd',
+                                               'de.tahifi.Dcpd.Playback')
+
+    @staticmethod
     def mounta():
         """Proxy to MounTA (``de.tahifi.MounTA``)."""
         return Interfaces._cache.get_interface('de.tahifi.MounTA',

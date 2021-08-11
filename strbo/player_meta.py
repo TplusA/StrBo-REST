@@ -437,6 +437,11 @@ class PlayerMetaRequests(Endpoint):
     #: Supported HTTP methods.
     methods = ('POST',)
 
+    ALLOWED_REQUEST_OPS = {
+        'start', 'stop', 'pause', 'resume', 'seek',
+        'skip_forward', 'skip_backward'
+    }
+
     def __init__(self, parent_meta_ep):
         Endpoint.__init__(
             self, 'player_requests', name='player_requests',
@@ -470,8 +475,7 @@ class PlayerMetaRequests(Endpoint):
                                      'No active actor, cannot forward '
                                      'player request {}'.format(opname))
 
-            if opname not in ('start', 'stop', 'pause', 'resume', 'seek',
-                              'skip_forward', 'skip_backward'):
+            if opname not in PlayerMetaRequests.ALLOWED_REQUEST_OPS:
                 return jsonify_error(request, log, False, 400,
                                      'Unknown op "{}"'.format(opname))
 
@@ -482,6 +486,31 @@ class PlayerMetaRequests(Endpoint):
                                      target_client_id=aa.owner_id)
             return jsonify_nc(request, status_code=202,
                               client_id=aa.owner_id)
+
+    def call_from_dbus_signal(self, req):
+        opname = req.get('op', None)
+        if opname is None:
+            log.error('Missing op')
+            return
+
+        with self._meta_ep as meta:
+            aa = meta.get_active_actor()
+            if not aa:
+                log.error('No active actor, cannot forward op {} from '
+                          'remote control'.format(opname))
+                return
+
+            if opname not in PlayerMetaRequests.ALLOWED_REQUEST_OPS:
+                log.error('Unknown op {} from remote control'.format(opname))
+                return
+
+            if not aa.is_rest_client():
+                log.info('Requested op {} should be processed already'
+                         .format(opname))
+                return
+
+            get_monitor().send_event('player_request', req,
+                                     target_client_id=aa.owner_id)
 
     def _forward_request_to_strbo(self, aa: _ActiveActor, request):
         req = request.json
@@ -522,6 +551,41 @@ def signal__audio_path_activated(source_id, player_id):
         pm.set_audio_path_participants(source_id, player_id)
 
 
+def signal__play_start_request():
+    player_meta_requests.call_from_dbus_signal({'op': 'start'})
+
+
+def signal__play_stop_request():
+    player_meta_requests.call_from_dbus_signal(
+        {'op': 'stop', 'reason': 'remote control'}
+    )
+
+
+def signal__play_pause_request():
+    player_meta_requests.call_from_dbus_signal({'op': 'pause'})
+
+
+def signal__play_resume_request():
+    player_meta_requests.call_from_dbus_signal({'op': 'resume'})
+
+
+def signal__play_next_request():
+    player_meta_requests.call_from_dbus_signal({'op': 'skip_forward'})
+
+
+def signal__play_previous_request():
+    player_meta_requests.call_from_dbus_signal({'op': 'skip_backward'})
+
+
+def signal__play_seek_request(position, units):
+    if units == '%':
+        position = float(position) / 10000.0
+
+    player_meta_requests.call_from_dbus_signal(
+        {'op': 'seek', 'position': position, 'units': str(units)}
+    )
+
+
 def add_endpoints():
     from strbo.player import streamplayer_endpoint
     player_meta.set_streamplayer_endpoint(streamplayer_endpoint)
@@ -540,3 +604,12 @@ def add_endpoints():
     dbus_audio_source.register_audio_source(iface)
     source_id, player_id = iface.GetCurrentPath()
     player_meta.set_audio_path_participants(source_id, player_id)
+
+    iface = strbo.dbus.Interfaces.dcpd_playback()
+    iface.connect_to_signal('Start', signal__play_start_request)
+    iface.connect_to_signal('Stop', signal__play_stop_request)
+    iface.connect_to_signal('Pause', signal__play_pause_request)
+    iface.connect_to_signal('Resume', signal__play_resume_request)
+    iface.connect_to_signal('Next', signal__play_next_request)
+    iface.connect_to_signal('Previous', signal__play_previous_request)
+    iface.connect_to_signal('Seek', signal__play_seek_request)
