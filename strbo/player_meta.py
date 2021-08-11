@@ -31,6 +31,7 @@ import random
 import strbo.dbus
 import strbo.player_control
 from .endpoint import Endpoint, register_endpoints
+from .endpoint import url_for
 from .utils import get_logger
 from .utils import jsonify_nc
 from .utils import jsonify_error, jsonify_error_for_missing_fields
@@ -64,13 +65,28 @@ class ActiveActorSchema(halogen.Schema):
 class PlayerMetaSchema(halogen.Schema):
     """Representation of :class:`PlayerMeta`."""
 
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Information about the active actor.
     owner = halogen.Attr(
         halogen.types.Nullable(ActiveActorSchema),
         attr=lambda value: value._active_actor
     )
 
-    active_audio_source =\
+    #: ID of the active audio source.
+    active_audio_source_id =\
         halogen.Attr(attr=lambda value: value._active_audio_path[0])
+
+    #: ID of the active audio player.
+    active_audio_player_id =\
+        halogen.Attr(attr=lambda value: value._active_audio_path[1])
+
+    #: Link to the active audio source.
+    active_audio_source = halogen.Link(attr='_active_audio_source_href')
+
+    #: Link to the active audio player.
+    active_audio_player = halogen.Link(attr='_active_audio_player_href')
 
 
 class _ActiveActor:
@@ -121,6 +137,8 @@ class PlayerMeta(Endpoint):
 
         # this is the active audio path as reported by TAPSwitch
         self._active_audio_path = (None, None)
+        self._active_audio_source_href = None
+        self._active_audio_player_href = None
 
     def __enter__(self):
         self.lock.acquire()
@@ -139,6 +157,25 @@ class PlayerMeta(Endpoint):
 
         with self.lock:
             if request.method == 'GET':
+                src_id = self._active_audio_path[0]
+                from strbo.listbrowse import audio_sources_endpoint
+                self._active_audio_source_href = \
+                    url_for(request, audio_sources_endpoint, {'id': src_id}) \
+                    if src_id else None
+
+                ply_id = self._active_audio_path[1]
+                if not ply_id:
+                    self._active_audio_player_href = None
+                elif ply_id == 'strbo':
+                    from strbo.player import streamplayer_endpoint
+                    self._active_audio_player_href = \
+                        streamplayer_endpoint.player_status.href
+                elif ply_id == 'roon':
+                    self._active_audio_player_href = None
+                else:
+                    log.error('Player ID "{}" not recognized'.format(ply_id))
+                    self._active_audio_player_href = None
+
                 return jsonify_nc(request, PlayerMetaSchema.serialize(self))
 
             # abort any ongoing activation
