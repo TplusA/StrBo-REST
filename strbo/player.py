@@ -23,6 +23,7 @@
 
 from enum import Enum
 from threading import RLock
+import halogen
 
 from .endpoint import Endpoint, register_endpoints
 from . import get_monitor
@@ -40,6 +41,31 @@ class PlayStatus(Enum):
     STOPPED = 2
     PLAYING = 3
     PAUSED = 4
+
+
+class PlayerStatusSchema(halogen.Schema):
+    """Representation of :class:`PlayerStatus`."""
+
+    #: Link to self.
+    self = halogen.Link(attr='href')
+
+    #: Name of this player.
+    player = halogen.Attr('streamplayer')
+
+    #: Play status (see :enum:`PlayerStatus`).
+    status = halogen.Attr(attr=lambda value: value.play_status.name.lower())
+
+    #: Currently playing URL, if any.
+    url = halogen.Attr(attr='current_url')
+
+    #: Current set of meta data, if any.
+    meta_data = halogen.Attr(attr='current_meta_data')
+
+    #: Current stream ID, if any.
+    stream_id = halogen.Attr(attr='current_stream_id')
+
+    #: Current stream key, if any.
+    stream_key = halogen.Attr(attr='current_stream_key')
 
 
 class PlayerStatus(Endpoint):
@@ -83,7 +109,7 @@ class PlayerStatus(Endpoint):
 
     def __call__(self, request, **values):
         with self.lock:
-            return jsonify_nc(request, self._mk_player_status_object())
+            return jsonify_nc(request, PlayerStatusSchema.serialize(self))
 
     def set_play_status(self, stream_id, status, *,
                         new_url=None, event_url=None, error=None,
@@ -124,30 +150,18 @@ class PlayerStatus(Endpoint):
             self.current_meta_data = meta_data
             self._send_player_status_event(None, None)
 
-    def _mk_player_status_object(self, url=None, queue_status=None,
-                                 dropped_ids=None):
-        result = {
-            'player': 'streamplayer',
-            'status': self.play_status.name.lower(),
-            'url': url if url else self.current_url,
-            'meta_data': self.current_meta_data,
-            'stream_id': self.current_stream_id,
-            'stream_key': self.current_stream_key,
-        }
-
-        if queue_status is not None:
-            result['queue_status'] = queue_status
-
-        if dropped_ids is not None:
-            result['dropped_stream_ids'] = dropped_ids
-
-        return result
-
     def _send_player_status_event(self, url, error, **kwargs):
-        msg = self._mk_player_status_object(url, **kwargs)
+        msg = PlayerStatusSchema.serialize(self)
 
-        if error:
-            msg['error'] = error
+        def extend_message(key, value):
+            if value is not None:
+                msg[key] = value
+
+        extend_message('url', url)
+        extend_message('error', error)
+        extend_message('queue_status', kwargs.get('queue_status', None))
+        extend_message('dropped_stream_ids',
+                       kwargs.get('dropped_ids', None))
 
         get_monitor().send_event('player_status', msg)
         return True
