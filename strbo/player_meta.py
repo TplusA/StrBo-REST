@@ -27,11 +27,14 @@ import dbus.service
 from werkzeug.wrappers import Response
 import halogen
 import random
+import json
 
 import strbo.dbus
 import strbo.player_control
 from .endpoint import Endpoint, register_endpoints
 from .endpoint import url_for
+from .system import DeviceInfo
+from .display import mk_drcpd_set_display_request
 from .utils import get_logger
 from .utils import jsonify_nc
 from .utils import jsonify_error, jsonify_error_for_missing_fields
@@ -87,6 +90,9 @@ class PlayerMetaSchema(halogen.Schema):
 
     #: Link to the active audio player.
     active_audio_player = halogen.Link(attr='_active_audio_player_href')
+
+    #: Where to send display content.
+    primary_display = halogen.Link(DeviceInfo.href.replace('{id}', 'self'))
 
 
 class _ActiveActor:
@@ -201,9 +207,12 @@ class PlayerMeta(Endpoint):
         # may return very quickly, and as it seems, within the same context of
         # the call. If we make the call while still holding our lock, then we
         # can end up deadlocked in one of the asynchronous handlers.
-        iface.RequestSource(source_id, {},
-                            reply_handler=self._request_source_done,
-                            error_handler=self._request_source_error)
+        iface.RequestSource(
+            source_id,
+            {'display_set': json.dumps(mk_drcpd_set_display_request(req))},
+            reply_handler=self._request_source_done,
+            error_handler=self._request_source_error
+        )
         return response
 
     def set_streamplayer_endpoint(self, ep):
@@ -546,7 +555,7 @@ all_endpoints = [player_meta, player_meta_requests]
 dbus_audio_source = None
 
 
-def signal__audio_path_activated(source_id, player_id):
+def signal__audio_path_activated(source_id, player_id, request_data):
     with player_meta as pm:
         pm.set_audio_path_participants(source_id, player_id)
 
