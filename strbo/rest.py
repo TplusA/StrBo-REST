@@ -193,9 +193,9 @@ class StrBo:
         add_airable_endpoints()
         add_recovery_endpoints()
         add_network_config_endpoints()
-        add_listbrowse_endpoints()
         add_player_endpoints()
         add_player_meta_endpoints()
+        add_listbrowse_endpoints()
 
         log.info('Up and running')
 
