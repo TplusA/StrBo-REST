@@ -212,13 +212,17 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
     def push_item_to_player(item, stream_ids):
         stream_id = get_new_stream_id()
         stream_key = md5(item['url'].encode()).digest()
-        preset_meta_data = item.get('meta_data', None)
+        preset_meta_data = item.get('meta_data', [])
 
         if preset_meta_data:
-            log.warning('Preset meta data for raw streams not implemented yet')
+            from json import loads
+            preset_meta_data = \
+                [(k, str(v)) for k, v in loads(preset_meta_data).items()
+                 if v is not None]
 
         fifo_overflow, _ = iface.Push(stream_id, item['url'], stream_key,
-                                      0, 'ms', 0, 'ms', keep_first_n_entries)
+                                      0, 'ms', 0, 'ms', keep_first_n_entries,
+                                      preset_meta_data)
 
         if fifo_overflow:
             log.error('Stream player queue overflow, '
