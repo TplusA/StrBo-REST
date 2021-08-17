@@ -34,6 +34,8 @@ import sys
 from .system import all_endpoints as all_system_endpoints
 from .system import add_endpoints as add_system_endpoints
 from .system import resume_system_update, detach_from_system_update
+from .display import all_endpoints as all_display_endpoints
+from .display import add_endpoints as add_display_endpoints
 from .airable import all_endpoints as all_airable_endpoints
 from .airable import add_endpoints as add_airable_endpoints
 from .recovery import all_endpoints as all_recovery_endpoints
@@ -121,6 +123,7 @@ class EntryPoint(Endpoint):
         Endpoint.__init__(self, 'entry_point')
 
         self.system = all_system_endpoints
+        self.displays = all_display_endpoints
         self.airable = all_airable_endpoints
         self.recovery_data = all_recovery_endpoints
         self.network_config = all_network_config_endpoints
@@ -186,6 +189,7 @@ class StrBo:
         register_endpoint(self.entry_point)
 
         add_system_endpoints()
+        add_display_endpoints()
         add_airable_endpoints()
         add_recovery_endpoints()
         add_network_config_endpoints()

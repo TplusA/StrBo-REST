@@ -28,6 +28,7 @@ import halogen
 import configparser
 
 import strbo.update_strbo
+import strbo.display
 from .endpoint import Endpoint, url_for, register_endpoints
 from .external import Files, Directories
 from .utils import jsonify_e, jsonify_error
@@ -78,6 +79,13 @@ class Device:
         self.description = description
         self.device_id = device_id
         self.software_versions = software_versions
+
+        strbo.display.displays_endpoint.add_display(
+            self.id, 0, DeviceInfo.href.replace('{id}', self.id)
+        )
+
+    def __del__(self):
+        strbo.display.displays_endpoint.remove_display(self.id)
 
 
 def _try_launch_strbo_update_process(update_req, workdir):
@@ -496,6 +504,9 @@ class SystemSchema(halogen.Schema):
     #: (see :class:`DeviceSchemaShort`).
     devices = halogen.Embedded(DevicesSchemaShort)
 
+    #: Link to all the displays in the system.
+    displays = halogen.Link(strbo.display.displays_endpoint.href)
+
 
 class System(Endpoint):
     """**API Endpoint** - Appliance global system information and management.
@@ -533,6 +544,10 @@ class System(Endpoint):
             return jsonify_e(request, self.get_etag(), 24 * 3600,
                              SystemSchema.serialize(self))
 
+    def late_init(self):
+        """Seconds step of initialization."""
+        self._refresh()
+
     def _clear(self):
         self.devices._clear()
 
@@ -561,6 +576,8 @@ all_endpoints = [
 def add_endpoints():
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
+
+    system_endpoint.late_init()
 
 
 def resume_system_update():
