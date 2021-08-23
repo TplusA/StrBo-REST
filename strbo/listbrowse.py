@@ -69,6 +69,8 @@ class AudioSourceSchema(halogen.Schema):
 
 
 class AudioSource(Endpoint):
+    """**API Endpoint** - Information about one audio source."""
+
     #: Path to endpoint.
     href = '/sources/{id}'
 
@@ -148,6 +150,8 @@ class USBAudioSourceSchema(halogen.Schema):
 
 
 class USBAudioSource(AudioSource):
+    """**API Endpoint** - USB file system audio source."""
+
     def __init__(self, audio_source_id, description):
         super().__init__(audio_source_id, description, 'audio_source_usb',
                          auto_register=False)
@@ -211,6 +215,8 @@ class AudioSourcesSchema(halogen.Schema):
 
 
 class AudioSources(Endpoint):
+    """**API Endpoint** - List of audio sources."""
+
     #: Path to endpoint.
     href = '/sources'
     href_for_map = [
@@ -259,6 +265,7 @@ class ListBrowsersSchema(halogen.Schema):
 
 
 class ListBrowser(Endpoint):
+    """Base class for list browsers."""
     def __init__(self, name, title, list_browsers_endpoint):
         super().__init__('list_browser', name=name, title=title)
         self.lock = RLock()
@@ -294,6 +301,8 @@ def get_offset_and_page_and_maximum_size(args):
 
 
 class ListBrowserUSBFS(ListBrowser):
+    """**API Endpoint** - USB file system browsing."""
+
     #: Path to endpoint.
     href = '/browse/usbfs/{partition}/{path}'
     href_for_map = [
@@ -458,6 +467,8 @@ class _AllLists:
 
 
 class ListBrowsers(Endpoint):
+    """**API Endpoint** - Collection of list browsers"""
+
     href = '/browse'
     methods = ('GET', )
     lock = RLock()
