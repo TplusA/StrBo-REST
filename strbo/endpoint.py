@@ -66,7 +66,7 @@ class GenericError(Error):
     """Any kind of error that doesn't fit into the more specific errors."""
 
     def __init__(self, message, ep=None, ep_name=None):
-        Error.__init__(self, message, ep, ep_name, just_the_message=True)
+        super().__init__(message, ep, ep_name, just_the_message=True)
 
 
 class NotCallableError(Error):
@@ -75,10 +75,10 @@ class NotCallableError(Error):
 
     def __init__(self, ep=None, ep_name=None):
         if isinstance(ep, Endpoint):
-            Error.__init__(self, "Not callable at {}:".format(ep.href),
-                           ep, ep_name)
+            super().__init__("Not callable at {}:".format(ep.href),
+                             ep, ep_name)
         else:
-            Error.__init__(self, "Not callable:", ep, ep_name)
+            super().__init__("Not callable:", ep, ep_name)
 
 
 class SerializeError(Error):
@@ -89,7 +89,7 @@ class SerializeError(Error):
     """
 
     def __init__(self, ep=None, ep_name=None):
-        Error.__init__(self, 'Failed serializing', ep, ep_name)
+        super().__init__('Failed serializing', ep, ep_name)
 
 
 class EmptyError(Error):
@@ -103,7 +103,7 @@ class EmptyError(Error):
     """
 
     def __init__(self, ep=None, ep_name=None):
-        Error.__init__(self, 'Have no data for', ep, ep_name)
+        super().__init__('Have no data for', ep, ep_name)
 
 
 class EndpointSchema(halogen.Schema):

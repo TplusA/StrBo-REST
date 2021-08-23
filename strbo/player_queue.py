@@ -125,8 +125,8 @@ class PlayerQueue(Endpoint):
     STREAM_ID_RANGE = _MAX_ID - _MIN_ID + 1
 
     def __init__(self, parent_player_endpoint):
-        Endpoint.__init__(
-            self, 'audio_player_queue', name='audio_player_queue',
+        super().__init__(
+            'audio_player_queue', name='audio_player_queue',
             title='T+A stream player queue operations')
         self._player = parent_player_endpoint
         self._next_free_id = PlayerQueue._MIN_ID

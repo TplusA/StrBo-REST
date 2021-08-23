@@ -181,8 +181,8 @@ class DeviceInfo(Endpoint):
     strbo_update_monitor = None
 
     def __init__(self, devices):
-        Endpoint.__init__(
-            self, 'hifi_system_device', name='device_info',
+        super().__init__(
+            'hifi_system_device', name='device_info',
             title='Accessing a specific device in the T+A HiFi system'
         )
 
@@ -389,8 +389,8 @@ class Devices(Endpoint):
     }
 
     def __init__(self):
-        Endpoint.__init__(
-            self, 'hifi_system_devices', name='all_devices',
+        super().__init__(
+            'hifi_system_devices', name='all_devices',
             title='List of all T+A devices connected to the system'
         )
 
@@ -532,7 +532,7 @@ class System(Endpoint):
     devices = Devices()
 
     def __init__(self):
-        Endpoint.__init__(self, 'hifi_system', title='T+A HiFi system')
+        super().__init__('hifi_system', title='T+A HiFi system')
 
     def __call__(self, request, **values):
         with self.lock:

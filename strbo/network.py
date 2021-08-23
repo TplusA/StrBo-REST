@@ -842,9 +842,9 @@ class Services(Endpoint):
     methods = ('GET', 'PUT')
 
     def __init__(self, network_endpoint):
-        Endpoint.__init__(self, 'network_services',
-                          name='network_service_info',
-                          title='Information about a specific network service')
+        super().__init__('network_services',
+                         name='network_service_info',
+                         title='Information about a specific network service')
         self.network_endpoint = network_endpoint
 
     def __call__(self, request, id, **values):
@@ -947,9 +947,9 @@ class Interfaces(Endpoint):
     methods = ('GET', 'PUT')
 
     def __init__(self, network_endpoint):
-        Endpoint.__init__(self, 'network_interfaces',
-                          name='network_interface_info',
-                          title='Information about a specific NIC')
+        super().__init__('network_interfaces',
+                         name='network_interface_info',
+                         title='Information about a specific NIC')
         self.network_endpoint = network_endpoint
 
     def __call__(self, request, mac, **values):
@@ -1159,8 +1159,8 @@ class Network(Endpoint):
     _all_nics_etag = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'network_configuration', name='network_config',
-                          title='Configuration of network services')
+        super().__init__('network_configuration', name='network_config',
+                         title='Configuration of network services')
         self.interfaces_endpoint = Interfaces(self)
         self.services_endpoint = Services(self)
 

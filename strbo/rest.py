@@ -120,7 +120,7 @@ class EntryPoint(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'entry_point')
+        super().__init__('entry_point')
 
         self.system = all_system_endpoints
         self.displays = all_display_endpoints

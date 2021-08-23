@@ -313,8 +313,8 @@ class DStatus(Endpoint):
     etag = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_data_info', name='data_info',
-                          title='Status of the recovery data')
+        super().__init__('recovery_data_info', name='data_info',
+                         title='Status of the recovery data')
         self.etag = DStatus._compute_etag(self.version_info, self.status)
 
     def __call__(self, request, **values):
@@ -410,8 +410,8 @@ class DVerify(Endpoint):
     lock = RLock()
 
     def __init__(self, status):
-        Endpoint.__init__(self, 'recovery_data_verify', name='verify_data',
-                          title='Verification of recovery data')
+        super().__init__('recovery_data_verify', name='verify_data',
+                         title='Verification of recovery data')
         self.status = status
         self.processing = False
         self.failed = False
@@ -746,8 +746,8 @@ class DReplace(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_data_replace', name='replace_data',
-                          title='Replace recovery data')
+        super().__init__('recovery_data_replace', name='replace_data',
+                         title='Replace recovery data')
         self._reset()
 
     def __call__(self, request, **values):
@@ -906,8 +906,8 @@ class SStatus(Endpoint):
     etag = None
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_info', name='system_info',
-                          title='Status of the recovery system')
+        super().__init__('recovery_system_info', name='system_info',
+                         title='Status of the recovery system')
         self.etag = SStatus._compute_etag(self.version_info, self.status)
 
     def __call__(self, request, **values):
@@ -1003,8 +1003,8 @@ class SVerify(Endpoint):
     lock = RLock()
 
     def __init__(self, status):
-        Endpoint.__init__(self, 'recovery_system_verify', name='verify_system',
-                          title='Verification of recovery system')
+        super().__init__('recovery_system_verify', name='verify_system',
+                         title='Verification of recovery system')
         self.status = status
         self.processing = False
         self.failed = False
@@ -1305,9 +1305,9 @@ class SReplace(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_replace',
-                          name='replace_system',
-                          title='Replace recovery system')
+        super().__init__('recovery_system_replace',
+                         name='replace_system',
+                         title='Replace recovery system')
         self._reset()
 
     def __call__(self, request, **values):
@@ -1404,9 +1404,9 @@ class SystemReboot(Endpoint):
     methods = ('POST',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'recovery_system_reboot',
-                          name='reboot_system',
-                          title='Reboot and enter recovery system')
+        super().__init__('recovery_system_reboot',
+                         name='reboot_system',
+                         title='Reboot and enter recovery system')
 
     def __call__(self, request, **values):
         req = request.json

@@ -94,8 +94,8 @@ class PlayerStatus(Endpoint):
     current_stream_id = 0
 
     def __init__(self, player):
-        Endpoint.__init__(
-                self, 'audio_player_status', name='audio_player_status',
+        super().__init__(
+                'audio_player_status', name='audio_player_status',
                 title='T+A stream player status')
         self._player = player
 

@@ -80,8 +80,8 @@ class PlayerControl(Endpoint):
     lock = Lock()
 
     def __init__(self, parent_player_endpoint):
-        Endpoint.__init__(
-            self, 'audio_player_control', name='audio_player_control',
+        super().__init__(
+            'audio_player_control', name='audio_player_control',
             title='T+A stream player control')
         self._player = parent_player_endpoint
 

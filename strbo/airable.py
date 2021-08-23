@@ -110,8 +110,8 @@ class Credentials(Endpoint):
     lock = RLock()
 
     def __init__(self):
-        Endpoint.__init__(
-            self, 'airable_service_credentials', name='service_credentials',
+        super().__init__(
+            'airable_service_credentials', name='service_credentials',
             title='Management of credentials for external music services'
         )
 
@@ -239,8 +239,8 @@ class ServiceInfo(Endpoint):
     lock = RLock()
 
     def __init__(self, services):
-        Endpoint.__init__(
-            self, 'airable_service', name='service_info',
+        super().__init__(
+            'airable_service', name='service_info',
             title='Accessing a specific Airable external streaming service'
         )
 
@@ -337,8 +337,8 @@ class Services(Endpoint):
     services_etag = None
 
     def __init__(self):
-        Endpoint.__init__(
-            self, 'airable_services', name='external_services',
+        super().__init__(
+            'airable_services', name='external_services',
             title='List of external streaming services available '
                   'through Airable'
         )
@@ -467,8 +467,8 @@ class Auth(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(
-            self, 'airable_authentication', name='authentication_url',
+        super().__init__(
+            'airable_authentication', name='authentication_url',
             title='Airable authentication URL'
         )
 
@@ -510,8 +510,8 @@ class Password(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_password', name='password_generator',
-                          title='Airable password generator')
+        super().__init__('airable_password', name='password_generator',
+                         title='Airable password generator')
 
     def __call__(self, request, **values):
         try:
@@ -565,8 +565,8 @@ class Redirect(Endpoint):
     methods = ('GET',)
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_redirect', name='redirect',
-                          title='Follow Airable redirect')
+        super().__init__('airable_redirect', name='redirect',
+                         title='Follow Airable redirect')
         self.root_url = None
 
     def __call__(self, request, path, **values):
@@ -657,8 +657,8 @@ class Info(Endpoint):
     external_services = Services()
 
     def __init__(self):
-        Endpoint.__init__(self, 'airable_info', name='info',
-                          title='Interfacing with Airable')
+        super().__init__('airable_info', name='info',
+                         title='Interfacing with Airable')
 
     def __call__(self, request, **values):
         with self.lock:

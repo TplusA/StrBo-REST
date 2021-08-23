@@ -130,8 +130,8 @@ class PlayerMeta(Endpoint):
     REST_AUDIO_SOURCE_ID = 'strbo.rest'
 
     def __init__(self):
-        Endpoint.__init__(
-            self, 'player_management', name='player_management',
+        super().__init__(
+            'player_management', name='player_management',
             title='T+A player and audio source management')
 
         self._active_actor = None
@@ -327,7 +327,7 @@ class DBusAudioSource(dbus.service.Object):
     iface = 'de.tahifi.AudioPath.Source'
 
     def __init__(self, object_path: str, pm: PlayerMeta):
-        dbus.service.Object.__init__(self, strbo.dbus.Bus(), object_path)
+        super().__init__(strbo.dbus.Bus(), object_path)
         self._player_meta = pm
 
     @dbus.service.method(dbus_interface=iface, in_signature='sa{sv}')
@@ -375,7 +375,7 @@ class PlayerMetaRequestsDBus(dbus.service.Object):
     iface = 'de.tahifi.Dcpd.Playback'
 
     def __init__(self, object_path: str):
-        dbus.service.Object.__init__(self, strbo.dbus.Bus(), object_path)
+        super().__init__(strbo.dbus.Bus(), object_path)
 
     @dbus.service.signal(dbus_interface=iface)
     def Start(self): pass
@@ -452,8 +452,8 @@ class PlayerMetaRequests(Endpoint):
     }
 
     def __init__(self, parent_meta_ep):
-        Endpoint.__init__(
-            self, 'player_requests', name='player_requests',
+        super().__init__(
+            'player_requests', name='player_requests',
             title='Requests forwarded to the active actor')
         self._meta_ep = parent_meta_ep
         self._dbus_playback_signals = None

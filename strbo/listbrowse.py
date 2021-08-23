@@ -260,7 +260,7 @@ class ListBrowsersSchema(halogen.Schema):
 
 class ListBrowser(Endpoint):
     def __init__(self, name, title, list_browsers_endpoint):
-        Endpoint.__init__(self, 'list_browser', name=name, title=title)
+        super().__init__('list_browser', name=name, title=title)
         self.lock = RLock()
         self.list_browsers_endpoint = list_browsers_endpoint
 
@@ -465,8 +465,7 @@ class ListBrowsers(Endpoint):
     _all_lists_etag = None
 
     def __init__(self, audio_sources_ep):
-        Endpoint.__init__(self, 'list_browsers',
-                          name='list_browsers', title='Lists')
+        super().__init__('list_browsers', name='list_browsers', title='Lists')
         self.audio_sources_ep = audio_sources_ep
         self.usb_browser_ep = ListBrowserUSBFS(self)
 
