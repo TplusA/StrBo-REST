@@ -22,6 +22,7 @@
 
 
 from threading import RLock
+from werkzeug.wrappers import Response
 import halogen
 import urllib.parse
 
@@ -47,6 +48,9 @@ class AudioSourceSchemaShort(halogen.Schema):
     #: ID of the audio service
     id = halogen.Attr()
 
+    #: Description of the audio source
+    title = halogen.Attr()
+
 
 class AudioSourceSchema(halogen.Schema):
     """Short representation of :class:`AudioSource`."""
@@ -54,31 +58,36 @@ class AudioSourceSchema(halogen.Schema):
     #: Link to self.
     self = halogen.Link(attr=lambda value: '/sources/' + value.id)
 
-    #: ID of the audio service
+    #: ID of the audio source
     id = halogen.Attr()
 
+    #: Description of the audio source
+    title = halogen.Attr()
+
     #: List of browsable lists
-    lists = halogen.Attr()
+    lists = halogen.Attr(required=False)
 
 
 class AudioSource(Endpoint):
     #: Path to endpoint.
     href = '/sources/{id}'
-    href_for_map = '/sources/<id>'
 
     #: Supported HTTP methods.
     methods = ('GET',)
 
     lock = RLock()
 
-    #: List of browsable lists
-    lists = []
-
-    def __init__(self, id):
-        Endpoint.__init__(self, 'audio_source',
-                          name='audio_source',
-                          title='Information about a specific audio source')
+    def __init__(self, id, endpoint_title, endpoint_id, *, auto_register=True,
+                 is_browsable=True):
+        super().__init__(endpoint_id, name=endpoint_id, title=endpoint_title)
         self.id = id
+
+        if is_browsable:
+            #: List of browsable lists
+            self.lists = []
+
+        if auto_register:
+            register_endpoint(self)
 
     def __enter__(self):
         self.lock.acquire()
@@ -88,7 +97,7 @@ class AudioSource(Endpoint):
         self.lock.release()
         return False
 
-    def __call__(self, request, id, **values):
+    def __call__(self, request, **values):
         return jsonify(request, AudioSourceSchema.serialize(self))
 
 
@@ -114,8 +123,11 @@ class USBAudioSourceSchema(halogen.Schema):
     #: Link to self.
     self = halogen.Link(attr=lambda value: '/sources/' + value.id)
 
-    #: ID of the audio service
+    #: ID of the audio source
     id = halogen.Attr()
+
+    #: Description of the audio source
+    title = halogen.Attr()
 
     #: List of browsable lists
     lists = halogen.Attr()
@@ -136,12 +148,13 @@ class USBAudioSourceSchema(halogen.Schema):
 
 
 class USBAudioSource(AudioSource):
-    def __init__(self):
-        super().__init__('strbo.usb')
+    def __init__(self, audio_source_id, description):
+        super().__init__(audio_source_id, description, 'audio_source_usb',
+                         auto_register=False)
         self._devices_and_partitions = strbo.usb.DevicesAndPartitions()
         register_endpoint(self)
 
-    def __call__(self, request, id, **values):
+    def __call__(self, request, **values):
         with self.lock:
             try:
                 cached = if_none_match(request,
@@ -193,29 +206,49 @@ class AudioSourcesSchema(halogen.Schema):
     #: List of audio source links
     sources = halogen.Embedded(
         halogen.types.List(AudioSourceSchemaShort),
-        attr=lambda value: value._all_audio_sources
+        attr=lambda value: value._all_audio_sources.values()
     )
 
 
 class AudioSources(Endpoint):
     #: Path to endpoint.
     href = '/sources'
+    href_for_map = [
+        '/sources',
+        '/sources/<id>'
+    ]
 
     #: Supported HTTP methods.
     methods = ('GET',)
 
-    _all_audio_sources = None
-
     def __init__(self):
-        Endpoint.__init__(self, 'audio_sources', name='audio_sources',
-                          title='List of Streaming Board audio sources')
-        self._all_audio_sources = [USBAudioSource()]
+        super().__init__('audio_sources', name='audio_sources',
+                         title='List of Streaming Board audio sources')
+        self._all_audio_sources = {}
 
     def __call__(self, request, **values):
-        return jsonify(request, AudioSourcesSchema.serialize(self))
+        source_id = values.get('id', None)
+        if source_id is None:
+            return jsonify(request, AudioSourcesSchema.serialize(self))
+
+        src = self._all_audio_sources.get(source_id, None)
+        return \
+            src(request, **values) if src is not None else Response(status=404)
 
     def get_usb_audio_source(self):
-        return self._all_audio_sources[0]
+        return self._all_audio_sources.get('strbo.usb', None)
+
+    def add_audio_source(self, source_id, source_name):
+        if source_id == 'strbo.usb':
+            self._all_audio_sources[source_id] = \
+                USBAudioSource(source_id, source_name)
+        else:
+            is_browsable = \
+                source_id not in ('roon', 'strbo.plainurl', 'strbo.rest')
+            api_id = 'audio_source_' + source_id.replace('.', '_')
+            self._all_audio_sources[source_id] = \
+                AudioSource(source_id, source_name, api_id,
+                            is_browsable=is_browsable)
 
 
 class ListBrowsersSchema(halogen.Schema):
@@ -497,3 +530,20 @@ def add_endpoints():
     iface.connect_to_signal('NewUSBDevice', signal__new_usb_device)
     iface.connect_to_signal('NewVolume', signal__new_volume)
     iface.connect_to_signal('DeviceRemoved', signal__device_removed)
+
+    iface = strbo.dbus.Interfaces.audio_path_manager()
+
+    usable, incomplete = iface.GetPaths()
+    if incomplete:
+        log.warning('TODO: Have incomplete audio paths, '
+                    'need to check back later')
+
+    def put_audio_source(source_id):
+        if source_id:
+            source_name, _, _, _ = iface.GetSourceInfo(source_id)
+            audio_sources_endpoint.add_audio_source(source_id, source_name)
+
+    for p in usable:
+        put_audio_source(p[0])
+    for p in incomplete:
+        put_audio_source(p[0])

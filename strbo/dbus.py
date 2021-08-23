@@ -230,8 +230,36 @@ class Interfaces:
                                                'de.tahifi.Dcpd.Network')
 
     @staticmethod
+    def dcpd_playback():
+        """Proxy to DCPD playback requests (``de.tahifi.Dcpd.Playback``)."""
+        return Interfaces._cache.get_interface('de.tahifi.Dcpd',
+                                               '/de/tahifi/Dcpd',
+                                               'de.tahifi.Dcpd.Playback')
+
+    @staticmethod
     def mounta():
         """Proxy to MounTA (``de.tahifi.MounTA``)."""
         return Interfaces._cache.get_interface('de.tahifi.MounTA',
                                                '/de/tahifi/MounTA',
                                                'de.tahifi.MounTA')
+
+    @staticmethod
+    def streamplayer_urlfifo():
+        """Proxy to Streamplayer (``de.tahifi.Streamplayer.URLFIFO``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.Streamplayer', '/de/tahifi/Streamplayer',
+            'de.tahifi.Streamplayer.URLFIFO')
+
+    @staticmethod
+    def streamplayer_playback():
+        """Proxy to Streamplayer (``de.tahifi.Streamplayer.Playback``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.Streamplayer', '/de/tahifi/Streamplayer',
+            'de.tahifi.Streamplayer.Playback')
+
+    @staticmethod
+    def audio_path_manager():
+        """Proxy to T+A Player Switch (``de.tahifi.AudioPath.Manager``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.TAPSwitch', '/de/tahifi/TAPSwitch',
+            'de.tahifi.AudioPath.Manager')

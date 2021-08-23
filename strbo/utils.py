@@ -384,6 +384,21 @@ def jsonify_simple(*args, **kwargs):
     return json.dumps(data, skipkeys=True, ensure_ascii=False)
 
 
+def require_fields_in_object(json_obj, fields,):
+    """Check if all given fields are present in given object, return missing
+    fields."""
+    return [f for f in fields if f not in json_obj]
+
+
+def jsonify_error_for_missing_fields(request, log, fields, is_crit=True, *,
+                                     j=None):
+    missing = \
+        require_fields_in_object(request.json if j is None else j, fields)
+    return jsonify_error(request, log, is_crit, 400,
+                         'Missing fields: {}'.format(', '.join(missing))) \
+        if missing else None
+
+
 def if_none_match(request, etag):
     """Check if requested ETag matches the current ETag.
 

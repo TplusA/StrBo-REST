@@ -72,6 +72,7 @@ def init(path_to_helpers, debug=False):
 
     # create the shared D-Bus instance
     Bus()
+    Bus().register_bus_name('de.tahifi.REST')
 
     root_dir = path_to_helpers[:path_to_helpers.rfind('/')]
 
