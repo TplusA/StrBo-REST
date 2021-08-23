@@ -1,3 +1,25 @@
+2021-08-27  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.17 released.
+
+	* Playback: Allow API clients to take control over the player.
+
+	* Playback: Allow sending preset meta data to the player.
+
+	* Playback: Allow audio source selection.
+
+	* Playback: Allow updating the appliance display content by REST API
+	  client while that client is the owner of the REST API audio source.
+
+	* Stability: Fix error handling in monitor when is client disconnected
+	  by some error (broken connection).
+
+	* Misc: Logging of requests and responses.
+
+	* Misc: Fix HTTP response in case a URL handler throws an exception
+	  which is caught in the request dispatcher. We get a full stack trace
+	  now as it was intended.
+
 2021-07-13  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.16 released.
