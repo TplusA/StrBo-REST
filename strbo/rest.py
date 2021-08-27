@@ -237,10 +237,13 @@ class StrBo:
             self._start_monitor(environ.get('SERVER_PORT', None))
 
         request = JSONRequest(environ)
+        log.info('Request: {}'.format(request))
 
         try:
             response = dispatch(request)
+            log.info('Response: {}'.format(response))
         except BaseException as e:
+            log.info('Exception: {}'.format(e))
             ex_type, ex_val, ex_tb = sys.exc_info()
 
             try:
