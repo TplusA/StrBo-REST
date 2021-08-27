@@ -264,7 +264,7 @@ class StrBo:
                 ]
 
                 response = jsonify_error(
-                        request.path, log, True, 500, str(ex_val),
+                        request, log, True, 500, str(ex_val),
                         error='exception',
                         exception_type=exception_type_name,
                         exception_trace=trace)
