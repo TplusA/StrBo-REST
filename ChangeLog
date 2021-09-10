@@ -11,7 +11,7 @@
 	* Playback: Allow updating the appliance display content by REST API
 	  client while that client is the owner of the REST API audio source.
 
-	* Stability: Fix error handling in monitor when is client disconnected
+	* Stability: Fix error handling in monitor when client is disconnected
 	  by some error (broken connection).
 
 	* Misc: Logging of requests and responses.
