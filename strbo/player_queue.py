@@ -215,9 +215,8 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
         preset_meta_data = item.get('meta_data', [])
 
         if preset_meta_data:
-            from json import loads
             preset_meta_data = \
-                [(k, str(v)) for k, v in loads(preset_meta_data).items()
+                [(k, str(v)) for k, v in preset_meta_data.items()
                  if v is not None]
 
         fifo_overflow, _ = iface.Push(stream_id, item['url'], stream_key,
