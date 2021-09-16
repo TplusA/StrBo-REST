@@ -1,3 +1,15 @@
+2021-09-17  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.18 released.
+
+	* Player: The REST API client must send meta data in push commands
+	  correctly now. We had a workaround for a bug in the app, but we
+	  don't need it nor want it anymore.
+
+	* Stability: Fix error handling in monitor when client is disconnected
+	  by some error (broken connection). The fixes in v0.17 were
+	  incomplete.
+
 2021-08-27  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.17 released.
