@@ -99,8 +99,16 @@ class ClientListener:
             except:  # noqa: E722
                 log.info('Lost client {}'.format(conn))
 
-            sel.unregister(conn)
-            conn.close()
+            try:
+                sel.unregister(conn)
+            except:  # noqa: E722
+                pass
+
+            try:
+                conn.close()
+            except:  # noqa: E722
+                pass
+
             kwargs['remove_cb'](conn)
             return
 
