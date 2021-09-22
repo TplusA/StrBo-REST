@@ -52,7 +52,7 @@ class PlayerStatusSchema(halogen.Schema):
     #: Name of this player.
     player = halogen.Attr('streamplayer')
 
-    #: Play status (see :enum:`PlayerStatus`).
+    #: Play status (see :class:`PlayerStatus`).
     status = halogen.Attr(attr=lambda value: value.play_status.name.lower())
 
     #: Currently playing URL, if any.
@@ -190,6 +190,8 @@ class PlayerStreamplayer(Endpoint):
         self._secret_key = key
 
     def check_authorization(self, request, what):
+        """Check if the given `request` can be fulfilled, return an error
+        response object in case the request is blocked."""
         req = request.json
 
         if self.access_granted(req.get('secret_key', None)):
@@ -222,6 +224,7 @@ all_endpoints = [
 
 def signal__now_playing(id, stream_key, url, url_fifo_is_full, dropped_ids,
                         meta_data):
+    """D-Bus signal handler: Stream player is now playing."""
     try:
         stream_key = ('{:02x}' * len(stream_key)).format(*stream_key)
     except Exception as e:
@@ -237,6 +240,7 @@ def signal__now_playing(id, stream_key, url, url_fifo_is_full, dropped_ids,
 
 
 def signal__meta_data_changed(id, meta_data):
+    """D-Bus signal handler: New meta data for the stream with given ID."""
     streamplayer_endpoint.player_status.update_meta_data(
             id, {kv[0]: kv[1] for kv in meta_data}
     )
@@ -244,6 +248,8 @@ def signal__meta_data_changed(id, meta_data):
 
 def signal__stopped_with_error(id, url, url_fifo_is_empty, dropped_ids,
                                reason):
+    """D-Bus signal handler: Stream player has stopped playing due to an
+    error."""
     streamplayer_endpoint.player_status.set_play_status(
             id, PlayStatus.STOPPED, new_url='', event_url=url, error=reason,
             queue_status='empty' if url_fifo_is_empty else None,
@@ -252,12 +258,15 @@ def signal__stopped_with_error(id, url, url_fifo_is_empty, dropped_ids,
 
 
 def signal__stopped(id, dropped_ids):
+    """D-Bus signal handler: Stream player has stopped playing becauses its
+    queue is empty."""
     streamplayer_endpoint.player_status.set_play_status(
             id, PlayStatus.STOPPED, new_url='', dropped_ids=dropped_ids
     )
 
 
 def signal__pause_state(id, is_paused):
+    """D-Bus signal handler: Stream player has entered pause mode."""
     streamplayer_endpoint.player_status.set_play_status(
             id, PlayStatus.PAUSED if is_paused else PlayStatus.PLAYING
     )
@@ -265,6 +274,7 @@ def signal__pause_state(id, is_paused):
 
 def signal__position_changed(id, position, position_units,
                              duration, duration_units):
+    """D-Bus signal handler: Stream position has changed."""
     get_monitor().send_event(
         'stream_position',
         {
@@ -276,6 +286,7 @@ def signal__position_changed(id, position, position_units,
 
 
 def signal__buffer(fill_level, cumulating):
+    """D-Bus signal handler: Stream player buffering status."""
     get_monitor().send_event(
         'player_buffer_level',
         {

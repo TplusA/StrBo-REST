@@ -44,6 +44,7 @@ log = get_logger('Player')
 
 
 class AudioSourceState(Enum):
+    """State of an audio source as reported by `TAPSwitch`."""
     PASSIVE = 1
     HALF = 2
     ACTIVE = 3
@@ -497,6 +498,12 @@ class PlayerMetaRequests(Endpoint):
                               client_id=aa.owner_id)
 
     def call_from_dbus_signal(self, req):
+        """Send remote control command received via D-Bus signal and
+        transformed into a JSON object to the active actor, if any.
+
+        This function is called by D-Bus signal handlers whose message is to be
+        sent as event to the active actor.
+        """
         opname = req.get('op', None)
         if opname is None:
             log.error('Missing op')
@@ -556,37 +563,45 @@ dbus_audio_source = None
 
 
 def signal__audio_path_activated(source_id, player_id, request_data):
+    """D-Bus signal handler: Audio path has been activated."""
     with player_meta as pm:
         pm.set_audio_path_participants(source_id, player_id)
 
 
 def signal__play_start_request():
+    """D-Bus signal handler: Someone requests start of playback."""
     player_meta_requests.call_from_dbus_signal({'op': 'start'})
 
 
 def signal__play_stop_request():
+    """D-Bus signal handler: Someone requests stop of playback."""
     player_meta_requests.call_from_dbus_signal(
         {'op': 'stop', 'reason': 'remote control'}
     )
 
 
 def signal__play_pause_request():
+    """D-Bus signal handler: Someone requests pause of playback."""
     player_meta_requests.call_from_dbus_signal({'op': 'pause'})
 
 
 def signal__play_resume_request():
+    """D-Bus signal handler: Someone requests resume of playback."""
     player_meta_requests.call_from_dbus_signal({'op': 'resume'})
 
 
 def signal__play_next_request():
+    """D-Bus signal handler: Someone requests skip to next stream."""
     player_meta_requests.call_from_dbus_signal({'op': 'skip_forward'})
 
 
 def signal__play_previous_request():
+    """D-Bus signal handler: Someone requests skip to previous stream."""
     player_meta_requests.call_from_dbus_signal({'op': 'skip_backward'})
 
 
 def signal__play_seek_request(position, units):
+    """D-Bus signal handler: Someone requests seeking in current stream."""
     if units == '%':
         position = float(position) / 10000.0
 
@@ -596,10 +611,10 @@ def signal__play_seek_request(position, units):
 
 
 def add_endpoints():
+    """Register all endpoints defined in this module."""
     from strbo.player import streamplayer_endpoint
     player_meta.set_streamplayer_endpoint(streamplayer_endpoint)
 
-    """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
 
     player_meta_requests.set_dbus_playback_signals(

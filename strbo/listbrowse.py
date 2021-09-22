@@ -53,7 +53,7 @@ class AudioSourceSchemaShort(halogen.Schema):
 
 
 class AudioSourceSchema(halogen.Schema):
-    """Short representation of :class:`AudioSource`."""
+    """Representation of :class:`AudioSource`."""
 
     #: Link to self.
     self = halogen.Link(attr=lambda value: '/sources/' + value.id)
@@ -69,7 +69,15 @@ class AudioSourceSchema(halogen.Schema):
 
 
 class AudioSource(Endpoint):
-    """**API Endpoint** - Information about one audio source."""
+    """**API Endpoint** - Information about one audio source.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``GET``     | Read out generic audio source information using schema   |
+    |             | :class:`AudioSourceSchema`.                              |
+    +-------------+----------------------------------------------------------+
+    """
 
     #: Path to endpoint.
     href = '/sources/{id}'
@@ -104,17 +112,37 @@ class AudioSource(Endpoint):
 
 
 class USBDeviceSchema(halogen.Schema):
+    """Representation of :class:`strbo.usb.Device`."""
+
+    #: Name of the USB device.
     name = halogen.Attr()
+
+    #: List of partitions on the USB device.
     partitions = halogen.Attr(attr=lambda value: value.partition_uuids)
+
+    #: Flag which is ``True`` if the device UUID is known to be unstable. A
+    # flaky UUID shall not be stored and thus cannot be used for reliable
+    # device recognition.
     flaky_uuid = \
         halogen.Attr(attr=lambda value: value.uuid.startswith('DO-NOT-STORE:'))
 
 
 class USBPartitionSchema(halogen.Schema):
+    """Representation of :class:`strbo.usb.Partition`."""
+
+    #: Name of the USB partition.
     name = halogen.Attr()
+
+    #: Device the USB partition is stored on.
     device = halogen.Attr(attr=lambda value: value.device_uuid)
+
+    #: Link to USB partition content.
     browse_href = \
         halogen.Attr(attr=lambda value: '/browse/usbfs/' + value.uuid + '/')
+
+    #: Flag which is ``True`` if the partition UUID is known to be unstable. A
+    # flaky UUID shall not be stored and thus cannot be used for reliable
+    # partition recognition.
     flaky_uuid = \
         halogen.Attr(attr=lambda value: value.uuid.startswith('DO-NOT-STORE:'))
 
@@ -150,7 +178,15 @@ class USBAudioSourceSchema(halogen.Schema):
 
 
 class USBAudioSource(AudioSource):
-    """**API Endpoint** - USB file system audio source."""
+    """**API Endpoint** - USB file system audio source.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``GET``     | Read out information about USB audio source using schema |
+    |             | :class:`USBAudioSourceSchema`.                           |
+    +-------------+----------------------------------------------------------+
+    """
 
     def __init__(self, audio_source_id, description):
         super().__init__(audio_source_id, description, 'audio_source_usb',
@@ -175,6 +211,7 @@ class USBAudioSource(AudioSource):
             return jsonify(request, USBAudioSourceSchema.serialize(self))
 
     def get_all_devices(self):
+        """Get all known USB devices."""
         with self.lock:
             return {
                 dev.uuid: dev
@@ -182,6 +219,7 @@ class USBAudioSource(AudioSource):
             }
 
     def get_all_partitions(self):
+        """Get all known USB partitions."""
         with self.lock:
             return {
                 part.uuid: part
@@ -191,12 +229,15 @@ class USBAudioSource(AudioSource):
             }
 
     def get_device_uuid_for_mounta_id(self, id):
+        """Get UUID of the USB device referred to by MounTA ID."""
         with self.lock:
             dev = self._devices_and_partitions \
                                     .get_devices_as_stored().get(id, None)
             return dev.uuid if dev else None
 
     def invalidate(self):
+        """Mark this object as modified so that the next ``GET`` returns a
+        fresh object not from cache."""
         with self.lock:
             self._devices_and_partitions.invalidate()
 
@@ -215,7 +256,19 @@ class AudioSourcesSchema(halogen.Schema):
 
 
 class AudioSources(Endpoint):
-    """**API Endpoint** - List of audio sources."""
+    """**API Endpoint** - List of audio sources.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``GET``     | Read out audio source information, either a list of all  |
+    |             | known audio sources using :class:`AudioSourcesSchema`,   |
+    |             | or one specified by an audio source ID.                  |
+    +-------------+----------------------------------------------------------+
+
+    Read out ``/sources`` to get a full list, read out ``/sources/<id>`` to get
+    information for the audio source with ID ``<id>``.
+    """
 
     #: Path to endpoint.
     href = '/sources'
@@ -242,9 +295,15 @@ class AudioSources(Endpoint):
             src(request, **values) if src is not None else Response(status=404)
 
     def get_usb_audio_source(self):
+        """Return the USB audio source object."""
         return self._all_audio_sources.get('strbo.usb', None)
 
     def add_audio_source(self, source_id, source_name):
+        """Add some audio source to the container.
+
+        This method generates an object of class :class:`AudioSource` or one of
+        its derived classes, depending on `source_id`.
+        """
         if source_id == 'strbo.usb':
             self._all_audio_sources[source_id] = \
                 USBAudioSource(source_id, source_name)
@@ -301,7 +360,38 @@ def _get_offset_and_page_and_maximum_size(args):
 
 
 class ListBrowserUSBFS(ListBrowser):
-    """**API Endpoint** - USB file system browsing."""
+    """**API Endpoint** - USB file system browsing.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``GET``     | Read out USB partition contents.                         |
+    +-------------+----------------------------------------------------------+
+
+    Pagination is controlled via URL parameters.
+
+    There are two parameters to control the pagination, ``page`` and ``size``.
+    The ``size`` parameter sets the desired page size, and the ``page``
+    parameter asks for the corresponding page of the specified size. The last
+    page may contain fewer items than ``size``, and pages requested beyond the
+    last page will be empty.
+
+    If the ``size`` parameter is not set, then the ``page`` parameter will be
+    ignored (the full list will be returned in this case). The first page is
+    page 0, which is also the default value in case the ``page`` parameter is
+    not set.
+
+    As an example, parameters ``?size=5&page=0`` cause the ``GET`` request to
+    return the first five items from the requested list, and ``?size=6&page=4``
+    returns items 24 through 29 (first item has index 0).
+
+    List contents are returned as JSON object. The ``meta`` entry in that
+    object always contains fields ``offset`` and ``total_size``. The ``offset``
+    is the index of the first item in the full list, and ``total_size`` is the
+    number of items in the full list. In addition, in case pagination
+    parameters were set in the request, these are repeated in the ``meta``
+    entry to make the returned JSON object more self-contained.
+    """
 
     #: Path to endpoint.
     href = '/browse/usbfs/{partition}/{path}'
@@ -422,6 +512,11 @@ class ListBrowserUSBFS(ListBrowser):
         return part, real_path
 
     def add_new_usb_device(self, id, devname, uuid, rootpath, usbport):
+        """Insert new USB device which may contain browsable partitions.
+
+        This method is called in D-Bus context when MounTA announces a new USB
+        mass storage device.
+        """
         with self.lock:
             src = self.list_browsers_endpoint.audio_sources_ep \
                                                     .get_usb_audio_source()
@@ -431,6 +526,11 @@ class ListBrowserUSBFS(ListBrowser):
                                      {'id': src.id, 'uuid': uuid}, ep=src)
 
     def remove_usb_device(self, id, uuid, rootpath):
+        """Remove USB device, and thus all of its partitions.
+
+        This method is called in D-Bus context when MounTA tells us that a USB
+        mass storage device has been removed.
+        """
         with self.lock:
             src = self.list_browsers_endpoint.audio_sources_ep \
                                                     .get_usb_audio_source()
@@ -441,6 +541,11 @@ class ListBrowserUSBFS(ListBrowser):
 
     def add_new_usb_partition(self, number, label, mountpoint,
                               parent_id, uuid):
+        """Insert new USB partition.
+
+        This method is called in D-Bus context when MounTA announces a new USB
+        partition.
+        """
         with self.lock:
             self.list_browsers_endpoint.audio_sources_ep \
                                         .get_usb_audio_source().invalidate()
@@ -467,7 +572,7 @@ class _AllLists:
 
 
 class ListBrowsers(Endpoint):
-    """**API Endpoint** - Collection of list browsers"""
+    """**API Endpoint** - Collection of list browsers."""
 
     href = '/browse'
     methods = ('GET', )
@@ -514,12 +619,14 @@ all_endpoints = [
 
 
 def signal__new_usb_device(id, devname, uuid, rootpath, usbport):
+    """D-Bus signal handler: New USB device added."""
     with list_browsers_endpoint as ep:
         with ep.usb_browser_ep as usb:
             usb.add_new_usb_device(id, devname, uuid, rootpath, usbport)
 
 
 def signal__new_volume(number, label, mountpoint, parent_id, uuid):
+    """D-Bus signal handler: New USB partition added."""
     with list_browsers_endpoint as ep:
         with ep.usb_browser_ep as usb:
             usb.add_new_usb_partition(number, label, mountpoint,
@@ -527,6 +634,7 @@ def signal__new_volume(number, label, mountpoint, parent_id, uuid):
 
 
 def signal__device_removed(id, uuid, rootpath):
+    """D-Bus signal handler: USB device removed."""
     with list_browsers_endpoint as ep:
         with ep.usb_browser_ep as usb:
             usb.remove_usb_device(id, uuid, rootpath)

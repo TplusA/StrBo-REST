@@ -66,9 +66,9 @@ class PlayerQueue(Endpoint):
     ``stream_ids`` and ``overflow``.
 
     ``stream_ids`` is an array of integers with a length of most the length of
-    ``items`` sent in the request. An integer at position _i_ in ``stream_ids``
+    ``items`` sent in the request. An integer at position *i* in ``stream_ids``
     is the stream ID assigned by the Streaming Board to the item at position
-    _i_ in ``items``. In case the ``stream_ids`` array is shorter than
+    *i* in ``items``. In case the ``stream_ids`` array is shorter than
     ``items``, then the trailing objects in ``items`` have not been sent to
     stream player due to some error. They should be sent again later.
 

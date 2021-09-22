@@ -392,6 +392,9 @@ def require_fields_in_object(json_obj, fields,):
 
 def jsonify_error_for_missing_fields(request, log, fields, is_crit=True, *,
                                      j=None):
+    """Generate a generic error response in case the given JSON object
+    `j` does not contain all fields given in list/set/tuple `fields`.
+    """
     missing = \
         require_fields_in_object(request.json if j is None else j, fields)
     return jsonify_error(request, log, is_crit, 400,

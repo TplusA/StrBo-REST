@@ -38,6 +38,14 @@ log = get_logger()
 
 
 def mk_drcpd_update_display_request(json_obj):
+    """Generate a new JSON object for ``drcpd`` for partial update of the
+    display content.
+
+    A ``display_update`` object is generated from the request in ``json_obj``
+    sent by the REST API client.
+
+    See also :meth:`mk_drcpd_set_display_request`.
+    """
     result = {}
     lines = json_obj.get('lines', None)
     if lines:
@@ -63,6 +71,14 @@ def mk_drcpd_update_display_request(json_obj):
 
 
 def mk_drcpd_set_display_request(json_obj):
+    """Generate a new JSON object for ``drcpd`` for setting the display
+    content.
+
+    A ``display_set`` object is generated from the request in ``json_obj``
+    sent by the REST API client.
+
+    See also :meth:`mk_drcpd_update_display_request`.
+    """
     lines = json_obj.get('lines', None)
     if lines:
         if isinstance(lines, list):
@@ -119,7 +135,32 @@ class SystemDisplaysSchema(halogen.Schema):
 
 
 class Display(Endpoint):
-    """**API Endpoint** - Interaction with one display."""
+    """**API Endpoint** - Interaction with one display.
+
+    +-------------+----------------------------------------------------------+
+    | HTTP method | Description                                              |
+    +=============+==========================================================+
+    | ``GET``     | Retrieve information about the display itself.           |
+    |             | See :class:`DisplaySchema`.                              |
+    +-------------+----------------------------------------------------------+
+    | ``POST``    | Send display content update request. The request is      |
+    |             | rejected if the sender is not the active actor.          |
+    +-------------+----------------------------------------------------------+
+
+    Details on method ``POST``:
+        The client is supposed to send a JSON object which contains the fields
+        The active actor's secret is expected in field ``secret_key``.
+
+        Field ``op`` must be set to either ``set`` or ``update``. The ``set``
+        operation should be used for initializing the display content. The
+        ``update`` operation should be used to change only part of the display
+        content.
+
+        The display element which can be set are ``title`` and ``lines``. The
+        ``title`` is a single string, usually shown somewhere at the top of the
+        display. The ``lines`` field is either a single string or a list of
+        strings, containing the text lines to be shown on the display.
+    """
 
     #: Supported HTTP methods.
     methods = ('GET', 'POST')
@@ -213,6 +254,7 @@ class SystemDisplays(Endpoint):
                           SystemDisplaysSchema.serialize(self))
 
     def set_dbus_json_emitter(self, sigs: SystemDisplaysDBus):
+        """Set object which sends our D-Bus signals."""
         self._dbus_json_emitter = sigs
 
     def _send_display_request(self, display_request):
@@ -273,6 +315,7 @@ all_endpoints = [displays_endpoint]
 
 
 def add_endpoints():
+    """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
 
     displays_endpoint.set_dbus_json_emitter(

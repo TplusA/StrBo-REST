@@ -30,6 +30,7 @@ log = get_logger()
 
 
 class Device:
+    """Information about a USB device."""
     def __init__(self, mounta_id, name, uuid, rootpath):
         self.mounta_id = int(mounta_id)
         self.name = str(name)
@@ -39,6 +40,7 @@ class Device:
 
 
 class Partition:
+    """Information about a USB partition of a USB device."""
     def __init__(self, part_number, mounta_device_id, name, mountpoint, uuid):
         self.part_number = int(part_number)
         self.mounta_device_id = int(mounta_device_id)
@@ -49,6 +51,7 @@ class Partition:
 
 
 class DevicesAndPartitions:
+    """Collection of all known USB devices and USB partitions."""
     def __init__(self):
         self._clear()
 

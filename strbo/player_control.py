@@ -141,6 +141,8 @@ def _process_pause_request(request):
 
 
 def check_seek_request_parameters(request, req):
+    """Check if the seek request parameters in JSON object `req` are correct
+    and complete."""
     if 'position' not in req and 'units' not in req:
         return None
 
@@ -149,6 +151,7 @@ def check_seek_request_parameters(request, req):
 
 
 def get_seek_request_parameters(req):
+    """Return seek request parameters contained in JSON object `req`."""
     if 'position' not in req and 'units' not in req:
         return 0, 'ms'
 

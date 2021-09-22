@@ -34,6 +34,7 @@ log = get_logger('Monitor')
 
 
 class Client:
+    """Representation of a REST API client hooked on the WebSocket."""
     def __init__(self):
         self._input_buffer = bytearray()
 
@@ -42,22 +43,43 @@ class Client:
         self.client_id = 0
 
     def append_data(self, data):
+        """Add data to the buffer which collects data sent by the client."""
         self._input_buffer += bytearray(data)
 
     def have_data(self):
+        """Whether or not there is data sent by the client."""
         return self._input_buffer != b''
 
     def take_data(self):
+        """Clear receive buffer, and return the buffer contents."""
         result = self._input_buffer
         self._input_buffer = bytearray()
         return result
 
     def invalidate_ownership(self, client_id):
+        """Clear client ID if given `client_id` matches the ID stored in this
+        client object."""
         if self.client_id == client_id:
             self.client_id = 0
 
 
 class ClientListener:
+    """A thread which receives data from one client.
+
+    Any data sent by the client is gathered in the client's receive buffer. As
+    soon as a complete message has been received (a complete message is a
+    message which is terminated with a binary zero), the message is parsed into
+    a JSON object. This object is then processed.
+
+    Currently, the only messages recognized on the WebSocket are those which
+    contain an ``op`` field. All other messages are discarded.
+
+    If ``op`` is set to ``register``, then this is a message from the REST API
+    client for registering itself for receival of targeted events. It
+    associates the WebSocket connection with the client ID assigned to it when
+    it declared itself the active actor (the ID is returned as ``owner_id`` on
+    audio source activation; see :class:`strbo.player_meta.PlayerMeta`).
+    """
     def __init__(self, port, add_cb, remove_cb):
         self.is_ready = threading.Event()
         self.is_running = True
@@ -169,10 +191,13 @@ class ClientListener:
                 clients_manager.unset_client_id(conn)
 
     def kick_client(self, conn):
+        """Remove client with associated with connection object `conn` because
+        the connection has died."""
         ClientListener._read(conn, None, self.sel,
                              remove_cb=self.remove_client_cb)
 
     def stop(self):
+        """Shut down thread."""
         os.write(self.stop_fd_write, b'exit\n\0')
         os.close(self.stop_fd_write)
         self.thread.join()
@@ -214,11 +239,19 @@ class ClientListener:
 
 
 class Event:
+    """Base class for events sent to WebSocket clients."""
     def __init__(self, **kwargs):
         self.kwargs = kwargs
 
 
 class EndpointEvent(Event):
+    """Event which refers to an endpoint.
+
+    The constructor adds the ``endpoint`` object member and assigns `endpoint`
+    to it. It also adds the ``target_client_id`` object member and assigns
+    either the value of `target_client_id` passed in `kwargs`, if any, or
+    ``None``
+    """
     def __init__(self, endpoint, **kwargs):
         super().__init__(**kwargs)
         self.endpoint = endpoint
@@ -226,6 +259,13 @@ class EndpointEvent(Event):
 
 
 class ObjectEvent(Event):
+    """Event which contains a JSON object.
+
+    The constructor adds the ``json_object`` object member and assigns
+    `json_object` to it. It also adds the ``target_client_id`` object member
+    and assigns either the value of `target_client_id` passed in `kwargs`, if
+    any, or ``None``
+    """
     def __init__(self, json_object, **kwargs):
         super().__init__(**kwargs)
         self.json_object = json_object
@@ -256,6 +296,7 @@ def _send_message_to_client(bytes, conn):
 
 
 class EventDispatcher:
+    """Process queued events in a thread."""
     def __init__(self, clients_manager):
         self.events = Queue(50)
         self.is_ready = threading.Event()
@@ -266,11 +307,13 @@ class EventDispatcher:
         self.is_ready.wait()
 
     def stop(self):
+        """Shut down, stop the worker thread."""
         self.events.put(None)
         self.thread.join()
         self.thread = None
 
     def put(self, ev):
+        """Put new event into queue, notify worker to send it."""
         if ev is not None:
             self.events.put(ev)
         else:
@@ -423,10 +466,12 @@ class Monitor:
         return False
 
     def get_client_by_connection(self, conn):
+        """Return the :class:`Client` object associated with a connection."""
         with self._lock:
             return self.clients.get(conn, None)
 
     def get_connection_by_client_id(self, client_id):
+        """Return the connection for a given client ID."""
         with self._lock:
             for conn, client in self.clients.items():
                 if client.client_id == client_id:
@@ -435,15 +480,20 @@ class Monitor:
             return None
 
     def set_client_id(self, conn, client_id):
+        """Assign client ID `client_id` to the client associated with given
+        connection."""
         with self._lock:
             client = self.clients.get(conn, None)
             if client:
                 client.client_id = client_id
 
     def unset_client_id(self, conn):
+        """Clear client ID for the client associated with given connection."""
         self.set_client_id(conn, 0)
 
     def invalidate_client_id(self, client_id):
+        """Active actor handling: clear client ID for the client with client ID
+        `client_id`, if any."""
         with self._lock:
             if not self.clients:
                 return
