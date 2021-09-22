@@ -116,6 +116,9 @@ class ClientListener:
         clients_manager = get_monitor()
         client = clients_manager.get_client_by_connection(conn)
 
+        if not client:
+            return
+
         while data:
             pos = data.find(b'\0')
 
@@ -421,7 +424,7 @@ class Monitor:
 
     def get_client_by_connection(self, conn):
         with self._lock:
-            return self.clients[conn]
+            return self.clients.get(conn, None)
 
     def get_connection_by_client_id(self, client_id):
         with self._lock:
@@ -433,7 +436,7 @@ class Monitor:
 
     def set_client_id(self, conn, client_id):
         with self._lock:
-            client = self.clients[conn]
+            client = self.clients.get(conn, None)
             if client:
                 client.client_id = client_id
 
