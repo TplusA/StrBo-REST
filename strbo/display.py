@@ -215,7 +215,7 @@ class SystemDisplays(Endpoint):
     def set_dbus_json_emitter(self, sigs: SystemDisplaysDBus):
         self._dbus_json_emitter = sigs
 
-    def send_display_request(self, display_request):
+    def _send_display_request(self, display_request):
         self._dbus_json_emitter.Object(json.dumps(display_request), [])
 
     def add_display(self, device_instance_id: str, display_id: Union[int, str],
@@ -230,7 +230,7 @@ class SystemDisplays(Endpoint):
             'system_display_{}_{}'.format(device_instance_id, display_id),
             '{}/{}-{}'.format(SystemDisplays.href,
                               device_instance_id, display_id),
-            link_to_device, self.send_display_request
+            link_to_device, self._send_display_request
         )
         self._all_displays[device_instance_id][display_id] = disp
         self._update_etag()

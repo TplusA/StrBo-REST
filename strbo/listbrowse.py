@@ -280,7 +280,7 @@ class ListBrowser(Endpoint):
         return False
 
 
-def get_offset_and_page_and_maximum_size(args):
+def _get_offset_and_page_and_maximum_size(args):
     size = args.get('size', None)
     page = args.get('page', 0)
 
@@ -324,7 +324,7 @@ class ListBrowserUSBFS(ListBrowser):
 
     def _do_call_unlocked(self, request, partition, path='', **values):
         list_offset, list_page, list_maxsize = \
-            get_offset_and_page_and_maximum_size(request.args)
+            _get_offset_and_page_and_maximum_size(request.args)
 
         if list_offset is None:
             return jsonify_error(request, log, False, 400,

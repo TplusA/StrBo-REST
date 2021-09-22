@@ -181,7 +181,7 @@ class PlayerQueue(Endpoint):
         return result
 
 
-def fixup_stream_id(stream_id):
+def _fixup_stream_id(stream_id):
     return stream_id if stream_id < 2**32 - 1 else None
 
 
@@ -277,8 +277,8 @@ def _process_next_request(request):
         play_status = 'unknown'
 
     return jsonify_nc(request,
-                      skipped_stream_id=fixup_stream_id(skipped_id),
-                      next_stream_id=fixup_stream_id(next_id),
+                      skipped_stream_id=_fixup_stream_id(skipped_id),
+                      next_stream_id=_fixup_stream_id(next_id),
                       play_status=play_status)
 
 
@@ -302,6 +302,6 @@ def _clear_or_query(request, keep):
     playing_id, queued_ids, removed_ids = iface.Clear(keep)
 
     return jsonify_nc(request,
-                      playing_stream_id=fixup_stream_id(playing_id),
+                      playing_stream_id=_fixup_stream_id(playing_id),
                       queued_stream_ids=queued_ids,
                       removed_stream_ids=removed_ids)
