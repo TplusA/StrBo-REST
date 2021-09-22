@@ -202,6 +202,7 @@ class SystemDisplays(Endpoint):
             title='All the displays in the system')
 
         self._all_displays = {}
+        self._dbus_json_emitter = None
         self._etag = None
 
     def __call__(self, request, **values):
