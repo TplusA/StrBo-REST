@@ -113,6 +113,30 @@ Main API entry point
 .. automodule:: strbo.rest
    :members:
 
+Stream player control
+---------------------
+
+.. automodule:: strbo.player
+    :members:
+
+.. automodule:: strbo.player_meta
+    :members:
+
+.. automodule:: strbo.player_queue
+    :members:
+
+.. automodule:: strbo.player_control
+    :members:
+
+USB mass storage browsing
+-------------------------
+
+.. automodule:: strbo.listbrowse
+    :members:
+
+.. automodule:: strbo.usb
+    :members:
+
 Network management
 ------------------
 
@@ -136,6 +160,9 @@ HiFi system management and software updates
 
 .. automodule:: strbo.system
    :members:
+
+.. automodule:: strbo.display
+    :members:
 
 .. automodule:: strbo.update_strbo
    :members:
