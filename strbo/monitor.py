@@ -88,7 +88,7 @@ class ClientListener:
     def _read(conn, mask, sel, **kwargs):
         try:
             data = conn.recv(1024)
-        except ConnectionResetError as e:
+        except Exception as e:
             log.error('Client disappeared: {}'.format(e))
             data = b''
 
