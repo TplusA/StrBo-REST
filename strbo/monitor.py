@@ -466,7 +466,7 @@ class Monitor:
         :attr:`client_listener` attribute.
         """
         with self._lock:
-            del self.clients[conn]
+            self.clients.pop(conn, None)
 
     def _handle_bad_connections(self, conns):
         """Function called by the worker thread in :class:`EventDispatcher`
