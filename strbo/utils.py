@@ -254,6 +254,11 @@ def mk_error_object(request_or_href, log, is_crit, message, *args, **kwargs):
     data['error_message'] = str(message) if message else "*** UNKNOWN ***"
 
     if log is not None:
+        message = str(message) if message else "*** UNKNOWN ERROR ***"
+
+        if 'internal_error_message' in data:
+            message += ' (' + data['internal_error_message'] + ')'
+
         if is_crit:
             log.critical(message)
         else:
