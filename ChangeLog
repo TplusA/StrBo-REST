@@ -1,3 +1,13 @@
+2021-09-23  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.19 released.
+
+	* Stability: Fix error handling in monitor when client is disconnected
+	  by some error (broken connection). The fixes in v0.18 were
+	  incomplete.
+
+	* Documentation: Updated.
+
 2021-09-17  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.18 released.
