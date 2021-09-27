@@ -215,6 +215,10 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
         preset_meta_data = item.get('meta_data', [])
 
         if preset_meta_data:
+            if 'title' in preset_meta_data and \
+                    'x-drcpd-title' not in preset_meta_data:
+                preset_meta_data['x-drcpd-title'] = preset_meta_data['title']
+
             preset_meta_data = \
                 [(k, str(v)) for k, v in preset_meta_data.items()
                  if v is not None]
