@@ -69,7 +69,17 @@ def _main():
     print('Waiting for messages')
 
     while True:
-        buffer = wsock.recv()
+        try:
+            buffer = wsock.recv()
+        except Exception as e:
+            print('Failed reading from WebSocket: {}'.format(e))
+            buffer = None
+            break
+        except KeyboardInterrupt:
+            print('Terminating')
+            buffer = None
+            break
+
         if len(buffer) == 1 and buffer[0] == '\0':
             continue
 
