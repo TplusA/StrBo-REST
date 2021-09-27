@@ -511,18 +511,13 @@ class PlayerMetaRequests(Endpoint):
 
         with self._meta_ep as meta:
             aa = meta.get_active_actor()
-            if not aa:
+            if not aa or not aa.is_rest_client():
                 log.error('No active actor, cannot forward op {} from '
                           'remote control'.format(opname))
                 return
 
             if opname not in PlayerMetaRequests.ALLOWED_REQUEST_OPS:
                 log.error('Unknown op {} from remote control'.format(opname))
-                return
-
-            if not aa.is_rest_client():
-                log.info('Requested op {} should be processed already'
-                         .format(opname))
                 return
 
             get_monitor().send_event('player_request', req,
