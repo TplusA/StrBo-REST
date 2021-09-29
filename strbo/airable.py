@@ -190,6 +190,16 @@ class ServiceSchema(halogen.Schema):
     #: is ``null``.
     login_status = halogen.Attr()
 
+    #: List of supported credential types. Any of the following types may occur
+    #: in this list:
+    #:
+    #: * ``preset``: User name and pasword are stored on file inside the
+    #:   appliance. When requested, these information are sent automatically to
+    #:   the server for authentication.
+    #: * ``oauth``: Authorization is done via OAuth 2. Requires extra
+    #:   interaction with the user.
+    credential_types = halogen.Attr()
+
 
 class ServiceSchemaShort(halogen.Schema):
     """Partial representation of :class:`Service`."""
@@ -204,10 +214,11 @@ class ServiceSchemaShort(halogen.Schema):
 class Service:
     """Information about a service accessible through Airable."""
 
-    def __init__(self, id, description):
+    def __init__(self, id, description, credential_types):
         self.id = id
         self.description = description
         self.login_status = None
+        self.credential_types = credential_types
 
     def update_login_status(self, data):
         """Set login status data. Called from
@@ -377,7 +388,7 @@ class Services(Endpoint):
 
         try:
             iface = strbo.dbus.Interfaces.credentials_read()
-            self.services = {c[0]: Service(c[0], c[1])
+            self.services = {c[0]: Service(c[0], c[1], list(c[2]))
                              for c in iface.GetKnownCategories()}
             self.services_etag = Services._compute_etag(self.services)
         except:  # noqa: E722
