@@ -1,3 +1,16 @@
+2021-10-01  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.20 released.
+
+	* Playback: Send x-drcpd-title tag to streamplayer so that this tag
+	  can be used as alternative title by the SPI slave. If not sent by
+	  the REST API client, then x-drcpd-title will be set to the value of
+	  the title tag (if present).
+
+	* Airable: Expose supported credential types for all music services.
+
+	* Misc: Minor improvements (logs, code simplifications).
+
 2021-09-23  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.19 released.
