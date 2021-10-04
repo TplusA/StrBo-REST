@@ -178,7 +178,8 @@ class PlayerMeta(Endpoint):
                     self._active_audio_player_href = \
                         streamplayer_endpoint.player_status.href
                 elif ply_id == 'roon':
-                    self._active_audio_player_href = None
+                    from strbo.player_roon import roon_player_status
+                    self._active_audio_player_href = roon_player_status.href
                 else:
                     log.error('Player ID "{}" not recognized'.format(ply_id))
                     self._active_audio_player_href = None

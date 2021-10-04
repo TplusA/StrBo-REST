@@ -258,6 +258,13 @@ class Interfaces:
             'de.tahifi.Streamplayer.Playback')
 
     @staticmethod
+    def roon_player_playback():
+        """Proxy to T+A Roon player (``de.tahifi.Streamplayer.Playback``)."""
+        return Interfaces._cache.get_interface(
+            'de.tahifi.Roon', '/de/tahifi/Roon',
+            'de.tahifi.Streamplayer.Playback')
+
+    @staticmethod
     def audio_path_manager():
         """Proxy to T+A Player Switch (``de.tahifi.AudioPath.Manager``)."""
         return Interfaces._cache.get_interface(
