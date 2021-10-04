@@ -95,8 +95,8 @@ class PlayerStatus(Endpoint):
 
     def __init__(self, player):
         super().__init__(
-                'audio_player_status', name='audio_player_status',
-                title='T+A stream player status')
+            'audio_player_status', name='audio_player_status',
+            title='T+A stream player status')
         self._player = player
 
     def __enter__(self):
@@ -114,6 +114,7 @@ class PlayerStatus(Endpoint):
     def set_play_status(self, stream_id, status, *,
                         new_url=None, event_url=None, error=None,
                         stream_key=None, meta_data=None, **kwargs):
+        """Set play status based on D-Bus signals."""
         with self.lock:
             changed = False
 
@@ -146,6 +147,7 @@ class PlayerStatus(Endpoint):
             return True
 
     def update_meta_data(self, stream_id, meta_data):
+        """Set meta data based on D-Bus signals."""
         if self.current_meta_data != meta_data:
             self.current_meta_data = meta_data
             self._send_player_status_event(None, None)
@@ -167,7 +169,7 @@ class PlayerStatus(Endpoint):
         return True
 
 
-class PlayerStreamplayer(Endpoint):
+class PlayerStreamplayer:
     """Collection of stream player API endpoints and related data.
 
     The secret key for direct player control is managed by this class as well.
@@ -222,8 +224,8 @@ all_endpoints = [
 ]
 
 
-def signal__now_playing(id, stream_key, url, url_fifo_is_full, dropped_ids,
-                        meta_data):
+def _signal__now_playing(stream_id, stream_key, url, url_fifo_is_full,
+                         dropped_ids, meta_data):
     """D-Bus signal handler: Stream player is now playing."""
     try:
         stream_key = ('{:02x}' * len(stream_key)).format(*stream_key)
@@ -232,48 +234,48 @@ def signal__now_playing(id, stream_key, url, url_fifo_is_full, dropped_ids,
         stream_key = None
 
     streamplayer_endpoint.player_status.set_play_status(
-            id, PlayStatus.PLAYING, new_url=url, stream_key=stream_key,
-            meta_data={kv[0]: kv[1] for kv in meta_data},
-            queue_status='full' if url_fifo_is_full else None,
-            dropped_ids=dropped_ids
+        stream_id, PlayStatus.PLAYING, new_url=url, stream_key=stream_key,
+        meta_data={kv[0]: kv[1] for kv in meta_data},
+        queue_status='full' if url_fifo_is_full else None,
+        dropped_ids=dropped_ids
     )
 
 
-def signal__meta_data_changed(id, meta_data):
+def _signal__meta_data_changed(stream_id, meta_data):
     """D-Bus signal handler: New meta data for the stream with given ID."""
     streamplayer_endpoint.player_status.update_meta_data(
-            id, {kv[0]: kv[1] for kv in meta_data}
+        stream_id, {kv[0]: kv[1] for kv in meta_data}
     )
 
 
-def signal__stopped_with_error(id, url, url_fifo_is_empty, dropped_ids,
-                               reason):
+def _signal__stopped_with_error(stream_id, url, url_fifo_is_empty, dropped_ids,
+                                reason):
     """D-Bus signal handler: Stream player has stopped playing due to an
     error."""
     streamplayer_endpoint.player_status.set_play_status(
-            id, PlayStatus.STOPPED, new_url='', event_url=url, error=reason,
-            queue_status='empty' if url_fifo_is_empty else None,
-            dropped_ids=dropped_ids
+        stream_id, PlayStatus.STOPPED, new_url='', event_url=url, error=reason,
+        queue_status='empty' if url_fifo_is_empty else None,
+        dropped_ids=dropped_ids
     )
 
 
-def signal__stopped(id, dropped_ids):
+def _signal__stopped(stream_id, dropped_ids):
     """D-Bus signal handler: Stream player has stopped playing becauses its
     queue is empty."""
     streamplayer_endpoint.player_status.set_play_status(
-            id, PlayStatus.STOPPED, new_url='', dropped_ids=dropped_ids
+        stream_id, PlayStatus.STOPPED, new_url='', dropped_ids=dropped_ids
     )
 
 
-def signal__pause_state(id, is_paused):
+def _signal__pause_state(stream_id, is_paused):
     """D-Bus signal handler: Stream player has entered pause mode."""
     streamplayer_endpoint.player_status.set_play_status(
-            id, PlayStatus.PAUSED if is_paused else PlayStatus.PLAYING
+        stream_id, PlayStatus.PAUSED if is_paused else PlayStatus.PLAYING
     )
 
 
-def signal__position_changed(id, position, position_units,
-                             duration, duration_units):
+def _signal__position_changed(stream_id, position, position_units,
+                              duration, duration_units):
     """D-Bus signal handler: Stream position has changed."""
     get_monitor().send_event(
         'stream_position',
@@ -285,7 +287,7 @@ def signal__position_changed(id, position, position_units,
         })
 
 
-def signal__buffer(fill_level, cumulating):
+def _signal__buffer(fill_level, cumulating):
     """D-Bus signal handler: Stream player buffering status."""
     get_monitor().send_event(
         'player_buffer_level',
@@ -300,10 +302,10 @@ def add_endpoints():
     register_endpoints(all_endpoints)
 
     iface = strbo.dbus.Interfaces.streamplayer_playback()
-    iface.connect_to_signal('NowPlaying', signal__now_playing)
-    iface.connect_to_signal('StoppedWithError', signal__stopped_with_error)
-    iface.connect_to_signal('Stopped', signal__stopped)
-    iface.connect_to_signal('PauseState', signal__pause_state)
-    iface.connect_to_signal('MetaDataChanged', signal__meta_data_changed)
-    iface.connect_to_signal('PositionChanged', signal__position_changed)
-    iface.connect_to_signal('Buffer', signal__buffer)
+    iface.connect_to_signal('NowPlaying', _signal__now_playing)
+    iface.connect_to_signal('StoppedWithError', _signal__stopped_with_error)
+    iface.connect_to_signal('Stopped', _signal__stopped)
+    iface.connect_to_signal('PauseState', _signal__pause_state)
+    iface.connect_to_signal('MetaDataChanged', _signal__meta_data_changed)
+    iface.connect_to_signal('PositionChanged', _signal__position_changed)
+    iface.connect_to_signal('Buffer', _signal__buffer)
