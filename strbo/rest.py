@@ -48,6 +48,8 @@ from .player import all_endpoints as all_player_endpoints
 from .player import add_endpoints as add_player_endpoints
 from .player_meta import all_endpoints as all_player_meta_endpoints
 from .player_meta import add_endpoints as add_player_meta_endpoints
+from .player_roon import all_endpoints as all_roon_player_endpoints
+from .player_roon import add_endpoints as add_roon_player_endpoints
 
 from .dbus import Bus
 from .endpoint import Endpoint, EndpointSchema, register_endpoint, dispatch
@@ -130,6 +132,7 @@ class EntryPoint(Endpoint):
         self.audio_sources = all_listbrowse_endpoints
         self.audio_player = all_player_endpoints
         self.audio_player += all_player_meta_endpoints
+        self.audio_player += all_roon_player_endpoints
 
     def __call__(self, request, **values):
         return jsonify(request, EntryPointSchema.serialize(self))
@@ -195,6 +198,7 @@ class StrBo:
         add_network_config_endpoints()
         add_player_endpoints()
         add_player_meta_endpoints()
+        add_roon_player_endpoints()
         add_listbrowse_endpoints()
 
         log.info('Up and running')
