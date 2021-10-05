@@ -25,6 +25,7 @@ import argparse
 import json
 import requests
 import websocket
+import sys
 
 
 def _register_connection(wsock, client_id):
@@ -58,7 +59,11 @@ def _main():
     options = _process_command_line()
 
     addr = options['address'] + ':' + str(options['port'])
-    requests.get('http://' + addr + '/v1/')
+    try:
+        requests.get('http://' + addr + '/v1/')
+    except Exception as e:
+        print('Failed connecting to WebSocket: {}'.format(e))
+        sys.exit(10)
 
     ws_uri = 'ws://' + addr + '/events'
     print('Connect to {}'.format(ws_uri))
