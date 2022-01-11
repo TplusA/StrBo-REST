@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2021, 2022  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -99,13 +99,13 @@ class PlayerControl(Endpoint):
             opname = req['op']
 
             if opname == 'start':
-                return _process_start_request(request)
+                return _process_start_request(request, req)
 
             if opname == 'stop':
                 return _process_stop_request(request, req)
 
             if opname == 'pause':
-                return _process_pause_request(request)
+                return _process_pause_request(request, req)
 
             if opname == 'seek':
                 return _process_seek_request(request, req)
@@ -122,21 +122,21 @@ class PlayerControl(Endpoint):
         return False
 
 
-def _process_start_request(request):
+def _process_start_request(request, req):
     iface = strbo.dbus.Interfaces.streamplayer_playback()
-    iface.Start()
+    iface.Start(req.get('reason', 'REST API start request'))
     return jsonify_nc(request)
 
 
 def _process_stop_request(request, req):
     iface = strbo.dbus.Interfaces.streamplayer_playback()
-    iface.Stop(req.get('reason', ''))
+    iface.Stop(req.get('reason', 'REST API stop request'))
     return jsonify_nc(request)
 
 
-def _process_pause_request(request):
+def _process_pause_request(request, req):
     iface = strbo.dbus.Interfaces.streamplayer_playback()
-    iface.Pause()
+    iface.Pause(req.get('reason', 'REST API pause request'))
     return jsonify_nc(request)
 
 

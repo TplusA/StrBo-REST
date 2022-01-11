@@ -415,9 +415,9 @@ class PlayerMetaRequests(Endpoint):
     ones which expect parameters, and they will fail with HTTP status 400 in
     case their are malformed.
 
-    For the ``stop`` request, an optional ``reason`` field may be set which
-    tells the callee why the playback has been stopped. This is purely for
-    diagnostic purposes.
+    For the ``start``, ``stop``, and ``pause`` requests, an optional ``reason``
+    field may be set which tells the callee why the playback has been stopped.
+    This is purely for diagnostic purposes.
 
     For the ``seek`` request, the position can be specified in fields
     ``position`` and ``units``. See :class:`strbo.player_control.PlayerControl`
@@ -505,16 +505,14 @@ class PlayerMetaRequests(Endpoint):
         This function is called by D-Bus signal handlers whose message is to be
         sent as event to the active actor.
         """
-        opname = req.get('op', None)
-        if opname is None:
-            log.error('Missing op')
-            return
-
         with self._meta_ep as meta:
             aa = meta.get_active_actor()
             if not aa or not aa.is_rest_client():
-                log.error('No active actor, cannot forward op {} from '
-                          'remote control'.format(opname))
+                return
+
+            opname = req.get('op', None)
+            if opname is None:
+                log.error('Missing op')
                 return
 
             if opname not in PlayerMetaRequests.ALLOWED_REQUEST_OPS:
@@ -566,7 +564,9 @@ def signal__audio_path_activated(source_id, player_id, request_data):
 
 def signal__play_start_request():
     """D-Bus signal handler: Someone requests start of playback."""
-    player_meta_requests.call_from_dbus_signal({'op': 'start'})
+    player_meta_requests.call_from_dbus_signal(
+        {'op': 'start', 'reason': 'remote control'}
+    )
 
 
 def signal__play_stop_request():
@@ -578,7 +578,9 @@ def signal__play_stop_request():
 
 def signal__play_pause_request():
     """D-Bus signal handler: Someone requests pause of playback."""
-    player_meta_requests.call_from_dbus_signal({'op': 'pause'})
+    player_meta_requests.call_from_dbus_signal(
+        {'op': 'pause', 'reason': 'remote control'}
+    )
 
 
 def signal__play_resume_request():
