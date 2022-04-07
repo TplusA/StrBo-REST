@@ -1,3 +1,11 @@
+2022-04-07  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.22 released.
+
+	* Playback: Send reason string to streamplayer for start and stop
+	  commands for debugging purposes. Clients can set these strings in
+	  their requests, too.
+
 2021-10-06  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.21 released.
@@ -223,4 +231,4 @@
 	* First release for testing.
 
 
-Copyright 2018, 2019, 2020, 2021 T+A elektroakustik GmbH & Co. KG
+Copyright 2018, 2019, 2020, 2021, 2022 T+A elektroakustik GmbH & Co. KG
