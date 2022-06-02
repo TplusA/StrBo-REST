@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2021, 2022  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -297,6 +297,17 @@ def _signal__buffer(fill_level, cumulating):
         })
 
 
+def _signal__dropped(stream_id, reason):
+    """D-Bus signal handler: Stream player has rejected a stream pushed
+    to its queue even before it started playing."""
+    get_monitor().send_event(
+        'stream_dropped',
+        {
+            'id': int(stream_id),
+            'reason': str(reason),
+        })
+
+
 def add_endpoints():
     """Register all endpoints defined in this module."""
     register_endpoints(all_endpoints)
@@ -309,3 +320,6 @@ def add_endpoints():
     iface.connect_to_signal('MetaDataChanged', _signal__meta_data_changed)
     iface.connect_to_signal('PositionChanged', _signal__position_changed)
     iface.connect_to_signal('Buffer', _signal__buffer)
+
+    iface = strbo.dbus.Interfaces.streamplayer_urlfifo()
+    iface.connect_to_signal('Dropped', _signal__dropped)
