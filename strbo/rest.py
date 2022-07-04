@@ -161,16 +161,30 @@ class JSONRequest(Request, ETagRequestMixin):
         this property contains ``None``. Note that the correct setting of the
         content type in the request is key to success.
         """
+        try:
+            return loads(self.json_string)
+        except JSONDecodeError as e:
+            log.error('Failed parsing JSON payload: {}'.format(e))
+
+        return None
+
+    @cached_property
+    def json_string(self):
+        """Extract unparsed JSON data from request, if any.
+
+        If the request's content type hints at JSON content, then this property
+        contains the unparsed JSON data sent along with the request. Otherwise,
+        this property contains ``None``. Note that the correct setting of the
+        content type in the request is key to success.
+        """
         ct = parse_options_header(self.headers.get('content-type'))
         if ct[0] != 'application/json':
             return None
 
         try:
-            return loads(self.data.decode(ct[1].get('charset', 'utf-8')))
+            return self.data.decode(ct[1].get('charset', 'utf-8'))
         except UnicodeDecodeError as e:
             log.error('Failed reading JSON payload: {}'.format(e))
-        except JSONDecodeError as e:
-            log.error('Failed parsing JSON payload: {}'.format(e))
 
         return None
 
