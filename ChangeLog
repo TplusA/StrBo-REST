@@ -1,3 +1,11 @@
+2022-08-18  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.23 released.
+
+	* Minor improvement: Add json_string property to JSONRequest.
+
+	* Misc: Update for Werkzeug 2.1.0 changes/Yocto Project kirkstone.
+
 2022-04-07  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.22 released.
