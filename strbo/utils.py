@@ -21,7 +21,7 @@
 # MA  02110-1301, USA.
 
 from enum import Enum
-from werkzeug.wrappers import Request, BaseRequest, Response
+from werkzeug.wrappers import Request, Response
 from pathlib import Path
 import json
 import logging
@@ -228,7 +228,7 @@ def mk_error_object(request_or_href, log, is_crit, message, *args, **kwargs):
     may be added to the object. This key is supposed to provide some context to
     given idea where the error occurred. In case ``request_or_href`` is a
     non-empty string, that string is used to set ``href``. In case
-    ``request_or_href`` is a :class:`werkzeug.wrappers.BaseRequest` object,
+    ``request_or_href`` is a :class:`werkzeug.wrappers.Request` object,
     then ``href`` is set to the ``path`` of the request object.
     """
     if args and kwargs:
@@ -243,7 +243,7 @@ def mk_error_object(request_or_href, log, is_crit, message, *args, **kwargs):
     if request_or_href:
         if isinstance(request_or_href, str):
             data['href'] = request_or_href
-        elif isinstance(request_or_href, BaseRequest):
+        elif isinstance(request_or_href, Request):
             data['href'] = request_or_href.path
         elif log:
             log.error('Parameter request_or_href of unexpected type')
