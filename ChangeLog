@@ -1,3 +1,9 @@
+2023-01-25  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.24 released.
+
+	* Stability: Fix concurrent access to endpoints.
+
 2022-08-18  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.23 released.
@@ -239,4 +245,4 @@
 	* First release for testing.
 
 
-Copyright 2018, 2019, 2020, 2021, 2022 T+A elektroakustik GmbH & Co. KG
+Copyright 2018--2023 T+A elektroakustik GmbH & Co. KG
