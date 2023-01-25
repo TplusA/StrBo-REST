@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018, 2020, 2021  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2018, 2020, 2021, 2023  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -20,6 +20,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA  02110-1301, USA.
 
+from threading import Lock
 from werkzeug.wrappers import Request
 from werkzeug.routing import Map, Rule
 import halogen
@@ -236,17 +237,20 @@ class Endpoint:
 
 
 url_map = Map()
+url_map_lock = Lock()
 dispatchers = {}
 
 
 def register_endpoint(e):
     """Register one endpoint."""
     hrefs = getattr(e, 'href_for_map', e.href)
-    if isinstance(hrefs, list):
-        for href in hrefs:
-            url_map.add(Rule(href, endpoint=e.id, methods=e.methods))
-    else:
-        url_map.add(Rule(hrefs, endpoint=e.id, methods=e.methods))
+
+    with url_map_lock:
+        if isinstance(hrefs, list):
+            for href in hrefs:
+                url_map.add(Rule(href, endpoint=e.id, methods=e.methods))
+        else:
+            url_map.add(Rule(hrefs, endpoint=e.id, methods=e.methods))
 
     dispatchers[e.id] = e
 
@@ -266,8 +270,10 @@ def dispatch(request):
     :class:`Endpoint`, if any, or throws an exception in case no
     :class:`Endpoint` is found for the URL.
     """
-    adapter = url_map.bind_to_environ(request.environ)
-    id, values = adapter.match()
+    with url_map_lock:
+        adapter = url_map.bind_to_environ(request.environ)
+        id, values = adapter.match()
+
     return dispatchers[id](request, **values)
 
 
@@ -297,8 +303,9 @@ def url_for(environ_or_request, endpoint, values=None):
     script_name = environ['SCRIPT_NAME']
     environ['SCRIPT_NAME'] = '/v1'
 
-    adapter = url_map.bind_to_environ(environ)
-    result = adapter.build(endpoint.id, values=values)
+    with url_map_lock:
+        adapter = url_map.bind_to_environ(environ)
+        result = adapter.build(endpoint.id, values=values)
 
     # Put back original value of `SCRIPT_NAME`.
     environ['SCRIPT_NAME'] = script_name
