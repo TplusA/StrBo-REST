@@ -1,3 +1,13 @@
+2023-02-06  Robert Tiemann  <r.tiemann@ta-hifi.de>
+
+	* Version 0.25 released.
+
+	* Stability: Fix exception during serialization in case no Airable
+	  services are known.
+
+	* USB: Handle exceptions that might be thrown by a call of stat() on
+	  certain file system entities.
+
 2023-01-25  Robert Tiemann  <r.tiemann@ta-hifi.de>
 
 	* Version 0.24 released.
