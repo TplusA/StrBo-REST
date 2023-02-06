@@ -344,7 +344,7 @@ class Services(Endpoint):
 
     lock = RLock()
 
-    services = None
+    services = {}
     services_etag = None
 
     def __init__(self):
@@ -379,7 +379,7 @@ class Services(Endpoint):
 
     def _clear(self):
         """Remove all services. Called internally and from :class:`Info`."""
-        self.services = None
+        self.services = {}
         self.services_etag = Services._compute_etag(self.services)
 
     def _refresh(self):
@@ -399,11 +399,10 @@ class Services(Endpoint):
     def get_service_by_id(self, id):
         """Return :class:`Service` object matching given `id`."""
         with self.lock:
-            if self.services is None:
+            if not self.services:
                 self._refresh()
 
-            return None if self.services is None \
-                else self.services.get(id, None)
+            return self.services.get(id, None)
 
     def get_json(self, **kwargs):
         """**Event monitor support** - Called from :mod:`strbo.monitor`."""
