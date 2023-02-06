@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2021, 2023  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -447,15 +447,19 @@ class ListBrowserUSBFS(ListBrowser):
                            })
             obj = {'name': file.name, 'href': href}
 
-            if file.is_file():
-                obj['type'] = 'file'
-                obj['playurl'] = urllib.parse.urlunparse((
-                    'strbo-usb', '',
-                    urllib.parse.quote('/{}/{}'.format(partition, relpath)),
-                    None, None, None
-                ))
-            elif file.is_dir():
-                obj['type'] = 'dir'
+            try:
+                if file.is_file():
+                    obj['type'] = 'file'
+                    obj['playurl'] = urllib.parse.urlunparse((
+                        'strbo-usb', '',
+                        urllib.parse.quote('/{}/{}'
+                                           .format(partition, relpath)),
+                        None, None, None
+                    ))
+                elif file.is_dir():
+                    obj['type'] = 'dir'
+            except OSError:
+                obj['type'] = 'unknown'
 
             return obj
 
