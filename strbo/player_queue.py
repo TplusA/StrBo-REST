@@ -1,7 +1,7 @@
 #! /usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2021  T+A elektroakustik GmbH & Co. KG
+# Copyright (C) 2021, 2023  T+A elektroakustik GmbH & Co. KG
 #
 # This file is part of StrBo-REST.
 #
@@ -209,7 +209,7 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
 
         return None
 
-    def push_item_to_player(item, stream_ids):
+    def push_item_to_player(item, stream_ids, dropped_ids):
         stream_id = get_new_stream_id()
         stream_key = md5(item['url'].encode()).digest()
         preset_meta_data = item.get('meta_data', [])
@@ -223,9 +223,12 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
                 [(k, str(v)) for k, v in preset_meta_data.items()
                  if v is not None]
 
-        fifo_overflow, _ = iface.Push(stream_id, item['url'], stream_key,
-                                      0, 'ms', 0, 'ms', keep_first_n_entries,
-                                      preset_meta_data)
+        stream_urls = [(item['url'], False)]
+
+        fifo_overflow, _, dropped_before, dropped_now, = \
+            iface.Push(stream_id, stream_urls, stream_key,
+                       0, 'ms', 0, 'ms', keep_first_n_entries,
+                       preset_meta_data)
 
         if fifo_overflow:
             log.error('Stream player queue overflow, '
@@ -233,10 +236,14 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
         else:
             stream_ids.append(stream_id)
 
+        dropped_ids += dropped_before
+        dropped_ids += dropped_now
+
         return fifo_overflow
 
     items = req['items']
     stream_ids = []
+    dropped_ids = []
     overflow = False
 
     if isinstance(items, list):
@@ -253,7 +260,7 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
                 return err
 
         for item in items:
-            overflow = push_item_to_player(item, stream_ids)
+            overflow = push_item_to_player(item, stream_ids, dropped_ids)
             if overflow:
                 break
             keep_first_n_entries = -1
@@ -262,9 +269,10 @@ def _process_push_request(request, req, get_new_stream_id, max_items_count):
         if err:
             return err
 
-        overflow = push_item_to_player(items, stream_ids)
+        overflow = push_item_to_player(items, stream_ids, dropped_ids)
 
-    return jsonify_nc(request, stream_ids=stream_ids, overflow=overflow)
+    return jsonify_nc(request, stream_ids=stream_ids, dropped_ids=dropped_ids,
+                      overflow=overflow)
 
 
 def _process_next_request(request):
